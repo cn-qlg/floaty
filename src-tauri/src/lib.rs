@@ -37,6 +37,11 @@ pub fn run() {
             commands::items::upsert_item,
             commands::items::toggle_item,
             commands::items::delete_item,
+            commands::windows::open_sticky_window,
+            commands::windows::hide_sticky,
+            commands::windows::show_sticky,
+            commands::windows::toggle_pin,
+            commands::windows::new_sticky_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
