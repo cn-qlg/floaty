@@ -3,6 +3,7 @@ use tauri::Manager;
 mod commands;
 mod db;
 mod error;
+mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,7 +15,14 @@ pub fn run() {
                 let data_dir = handle.path().app_data_dir().expect("app_data_dir");
                 db::init(data_dir).await.expect("db init")
             });
-            app.manage(pool);
+            app.manage(pool.clone());
+
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = windows::restore_on_startup(&handle, &pool).await {
+                    eprintln!("[floaty] restore_on_startup failed: {}", e);
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

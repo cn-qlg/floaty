@@ -11,21 +11,7 @@
   },
   "app": {
     "macOSPrivateApi": true,
-    "windows": [
-      {
-        "title": "Floaty",
-        "width": 320,
-        "height": 420,
-        "x": 200,
-        "y": 200,
-        "resizable": true,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": false,
-        "visible": true,
-        "focus": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
