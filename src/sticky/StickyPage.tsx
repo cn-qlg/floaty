@@ -15,12 +15,26 @@ export function StickyPage({ stickyId }: StickyPageProps) {
 
   const pinned = sticky.pinned === 1;
 
-  const onTogglePin = async () => {
+  const onTogglePin = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     try {
-      const next = await ipc.togglePin(stickyId);
-      setSticky({ ...sticky, pinned: next ? 1 : 0 });
+      await ipc.togglePin(stickyId);
+      const fresh = await ipc.getSticky(stickyId);
+      setSticky(fresh);
+      console.log("[floaty] pin toggled →", fresh.pinned === 1);
     } catch (err) {
       console.error("[floaty] togglePin failed:", err);
+    }
+  };
+
+  const onClose = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await ipc.hideSticky(stickyId);
+    } catch (err) {
+      console.error("[floaty] hideSticky failed:", err);
     }
   };
 
@@ -44,8 +58,13 @@ export function StickyPage({ stickyId }: StickyPageProps) {
             </span>
           )}
         </strong>
-        <div className="flex items-center gap-1">
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <button
+            type="button"
             className={
               pinned
                 ? "text-[12px] w-6 h-5 rounded bg-red-500 text-white shadow-sm"
@@ -53,13 +72,16 @@ export function StickyPage({ stickyId }: StickyPageProps) {
             }
             onClick={onTogglePin}
             title={pinned ? "已置顶（点击取消）" : "置顶"}
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             📌
           </button>
           <button
+            type="button"
             className="text-[11px] w-6 h-5 rounded opacity-40 hover:opacity-80 hover:bg-black/5"
-            onClick={() => ipc.hideSticky(stickyId)}
+            onClick={onClose}
             title="关闭（不删除，可从菜单栏恢复）"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             ✕
           </button>

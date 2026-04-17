@@ -98,16 +98,21 @@ pub async fn toggle_pin(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<
     Ok(next == 1)
 }
 
-/// 冷启动：打开所有 hidden=0 的便签；若一张都没，新建一张并打开。
+/// 冷启动：打开所有 hidden=0 的便签。
+/// 仅当**全库为空**（首次安装）时才自动创建一张默认便签；
+/// 有便签但都 hidden=1 时，只启动 tray，让用户通过菜单栏恢复，避免每次重启都冒出空白新便签。
 pub async fn restore_on_startup(app: &AppHandle, db: &Db) -> AppResult<()> {
     let visible = db::stickies::list_visible(db).await?;
-    if visible.is_empty() {
-        let fresh = db::stickies::create_default(db).await?;
-        open(app, &fresh).await?;
-    } else {
+    if !visible.is_empty() {
         for s in visible {
             open(app, &s).await?;
         }
+        return Ok(());
+    }
+    let all = db::stickies::list_all(db).await?;
+    if all.is_empty() {
+        let fresh = db::stickies::create_default(db).await?;
+        open(app, &fresh).await?;
     }
     Ok(())
 }
