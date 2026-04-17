@@ -119,9 +119,12 @@ fn sanitize_size(w: i64, h: i64) -> (i64, i64) {
     (if w_ok { w } else { 320 }, if h_ok { h } else { 420 })
 }
 
-/// 合理性 clamp：坐标不应离谱（例如 > 20000）；否则不设置（让系统默认位置）
+/// 合理性 clamp：保守屏幕范围（含多显示器）。离谱坐标视为 stale bug 数据，
+/// 清掉让系统用默认位置放置窗口。
+/// - x in [-3000, 5000]：允许副屏在左/右
+/// - y in [-500, 3000]：允许副屏在上方少量 off-screen，但挡住因物理/逻辑单位 bug 导致的 y=-1000+
 fn sanitize_position(x: i64, y: i64) -> Option<(i64, i64)> {
-    if (-20000..=20000).contains(&x) && (-20000..=20000).contains(&y) {
+    if (-3000..=5000).contains(&x) && (-500..=3000).contains(&y) {
         Some((x, y))
     } else {
         None
