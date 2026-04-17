@@ -11,6 +11,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let handle = app.handle().clone();
             let pool = tauri::async_runtime::block_on(async move {
                 let data_dir = handle.path().app_data_dir().expect("app_data_dir");
