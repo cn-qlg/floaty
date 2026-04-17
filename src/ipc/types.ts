@@ -34,3 +34,18 @@ export interface ItemUpsert {
   due_at: number | null;
   sort_order: number;
 }
+
+export interface StickyPatch {
+  title?: string;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  pinned?: number;
+  bg_color?: string;
+  opacity?: number;
+  font_size?: number;
+  font_color?: string;
+  z_order?: number;
+  hidden?: number;
+}

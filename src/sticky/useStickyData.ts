@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { ipc } from "../ipc/client";
 import type { Sticky } from "../ipc/types";
 
-export function useStickyData() {
+export function useStickyData(stickyId: string) {
   const [sticky, setSticky] = useState<Sticky | null>(null);
   const [markdown, setMarkdown] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
@@ -12,7 +12,7 @@ export function useStickyData() {
   useEffect(() => {
     (async () => {
       try {
-        const s = await ipc.getOrCreateDefaultSticky();
+        const s = await ipc.getSticky(stickyId);
         setSticky(s);
         const items = await ipc.listItems(s.id);
         const combined = items.map((i) => i.content_md).join("\n");
@@ -23,7 +23,7 @@ export function useStickyData() {
         console.error("[floaty] sticky load failed:", err);
       }
     })();
-  }, []);
+  }, [stickyId]);
 
   const save = useCallback((md: string) => {
     setMarkdown(md);

@@ -1,30 +1,51 @@
 import { Editor } from "../editor/Editor";
 import { useStickyData } from "./useStickyData";
+import { ipc } from "../ipc/client";
 
-export function StickyPage() {
-  const { sticky, markdown, loaded, save } = useStickyData();
+interface StickyPageProps {
+  stickyId: string;
+}
+
+export function StickyPage({ stickyId }: StickyPageProps) {
+  const { sticky, markdown, loaded, save } = useStickyData(stickyId);
 
   if (!loaded || !sticky) {
     return <div className="h-screen bg-yellow-100 p-3 text-xs opacity-60">Loading...</div>;
   }
 
-  const bgColor = sticky.bg_color;
-  const opacity = sticky.opacity;
+  const pinned = sticky.pinned === 1;
 
   return (
     <div
       className="h-screen flex flex-col backdrop-blur-md"
       style={{
-        backgroundColor: hexWithAlpha(bgColor, opacity),
+        backgroundColor: hexWithAlpha(sticky.bg_color, sticky.opacity),
         color: "var(--sticky-fg)",
       }}
     >
       <div
         data-tauri-drag-region
-        className="flex items-center justify-between px-3 py-1.5 text-xs opacity-70 border-b border-black/5 select-none cursor-grab active:cursor-grabbing"
+        className="flex items-center justify-between px-3 py-1.5 text-xs border-b border-black/5 select-none cursor-grab active:cursor-grabbing"
       >
-        <strong data-tauri-drag-region className="pointer-events-none">📋 Floaty</strong>
-        <span data-tauri-drag-region className="text-[10px] pointer-events-none">⚙️</span>
+        <strong data-tauri-drag-region className="pointer-events-none opacity-70">
+          📋 Floaty
+        </strong>
+        <div className="flex items-center gap-2">
+          <button
+            className={`text-[11px] px-1 rounded ${pinned ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
+            onClick={() => ipc.togglePin(stickyId)}
+            title={pinned ? "取消置顶" : "置顶"}
+          >
+            📌
+          </button>
+          <button
+            className="text-[11px] px-1 rounded opacity-40 hover:opacity-70"
+            onClick={() => ipc.hideSticky(stickyId)}
+            title="关闭（不删除，可从菜单栏恢复）"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto p-3">
         <Editor initialMarkdown={markdown} onChange={save} />
