@@ -17,3 +17,30 @@ html, body, #root {
   font-size: 14px;
   overflow: hidden;
 }
+
+/* TipTap task list */
+ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin: 2px 0;
+}
+ul[data-type="taskList"] li > label {
+  margin-top: 3px;
+  user-select: none;
+}
+ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+ul[data-type="taskList"] li[data-checked="true"] > div {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.ProseMirror:focus {
+  outline: none;
+}
