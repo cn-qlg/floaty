@@ -20,6 +20,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::stickies::get_or_create_default_sticky,
             commands::stickies::list_stickies,
+            commands::items::list_items,
+            commands::items::upsert_item,
+            commands::items::toggle_item,
+            commands::items::delete_item,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
