@@ -1,8 +1,9 @@
-# StickyDo — Design Spec
+# Floaty — Design Spec
 
 **Status:** Draft v1
 **Date:** 2026-04-17
-**Working name:** StickyDo (可改)
+**Project name:** Floaty
+**Repo dir:** `OpenSource/floaty/`
 
 > 一款 macOS 桌面便签式 todo 工具：每个清单一个独立浮动窗口，支持 markdown、时间紧急度配色、提醒。技术栈为 Tauri 2 + React + TypeScript + SQLite。
 
@@ -358,7 +359,7 @@ update_settings(patch)
 ## 9. 项目目录结构（建议）
 
 ```
-desktop-todo/                       # 仓库根（working name: stickydo）
+floaty/                             # 仓库根
 ├── src/                            # 前端 (React)
 │   ├── sticky/                     # 单便签 UI
 │   ├── menubar/                    # 菜单栏下拉
