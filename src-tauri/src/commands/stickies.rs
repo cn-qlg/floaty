@@ -9,7 +9,7 @@ pub async fn get_or_create_default_sticky(app: AppHandle, db: State<'_, Db>) -> 
         return Ok(s);
     }
     let s = db::stickies::create_default(&db).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(s)
 }
 
@@ -31,7 +31,7 @@ pub async fn get_sticky(db: State<'_, Db>, id: String) -> AppResult<Sticky> {
 #[tauri::command]
 pub async fn create_sticky(app: AppHandle, db: State<'_, Db>) -> AppResult<Sticky> {
     let s = db::stickies::create_default(&db).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(s)
 }
 
@@ -43,13 +43,13 @@ pub async fn update_sticky(
     patch: StickyPatch,
 ) -> AppResult<Sticky> {
     let s = db::stickies::update(&db, &id, patch).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(s)
 }
 
 #[tauri::command]
 pub async fn delete_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> AppResult<()> {
     db::stickies::delete(&db, &id).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(())
 }

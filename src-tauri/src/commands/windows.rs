@@ -11,7 +11,7 @@ pub async fn open_sticky_window(
 ) -> AppResult<()> {
     let sticky = crate::db::stickies::get(&db, &sticky_id).await?;
     windows::open(&app, &sticky).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(())
 }
 
@@ -22,7 +22,7 @@ pub async fn hide_sticky(
     sticky_id: String,
 ) -> AppResult<()> {
     windows::hide(&app, &sticky_id, &db).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(())
 }
 
@@ -33,7 +33,7 @@ pub async fn show_sticky(
     sticky_id: String,
 ) -> AppResult<()> {
     windows::show(&app, &sticky_id, &db).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(())
 }
 
@@ -44,7 +44,7 @@ pub async fn toggle_pin(
     sticky_id: String,
 ) -> AppResult<bool> {
     let pinned = windows::toggle_pin(&app, &sticky_id, &db).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(pinned)
 }
 
@@ -52,6 +52,6 @@ pub async fn toggle_pin(
 pub async fn new_sticky_window(app: AppHandle, db: State<'_, Db>) -> AppResult<String> {
     let sticky = crate::db::stickies::create_default(&db).await?;
     windows::open(&app, &sticky).await?;
-    crate::tray::refresh_menu(&app);
+    crate::tray::refresh_menu(&app).await;
     Ok(sticky.id)
 }

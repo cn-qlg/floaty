@@ -6,7 +6,11 @@ use tauri::{
 };
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
-    let menu = build_menu(app)?;
+    // setup 不在 tokio worker，block_on 安全
+    let db = app.state::<Db>();
+    let all = tauri::async_runtime::block_on(db::stickies::list_all(&db))
+        .unwrap_or_default();
+    let menu = build_menu(app, &all)?;
     let icon = app
         .default_window_icon()
         .cloned()
@@ -22,22 +26,29 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Rebuild the tray menu from current DB state. Call after any sticky mutation.
-pub fn refresh_menu(app: &AppHandle) {
+/// 从 IPC（async / tokio worker）调用。必须是 async，不能在里面 block_on。
+pub async fn refresh_menu(app: &AppHandle) {
+    let db = app.state::<Db>();
+    let all = match db::stickies::list_all(&db).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("[floaty] tray refresh list_all failed: {}", e);
+            return;
+        }
+    };
     if let Some(tray) = app.tray_by_id("floaty-tray") {
-        if let Ok(menu) = build_menu(app) {
-            if let Err(e) = tray.set_menu(Some(menu)) {
-                eprintln!("[floaty] tray refresh failed: {}", e);
+        match build_menu(app, &all) {
+            Ok(menu) => {
+                if let Err(e) = tray.set_menu(Some(menu)) {
+                    eprintln!("[floaty] tray refresh set_menu failed: {}", e);
+                }
             }
+            Err(e) => eprintln!("[floaty] tray refresh build_menu failed: {}", e),
         }
     }
 }
 
-fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let db = app.state::<Db>();
-    let all = tauri::async_runtime::block_on(db::stickies::list_all(&db))
-        .unwrap_or_default();
-
+fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     let heading = MenuItem::with_id(
         app,
@@ -102,7 +113,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
                     if let Err(e) = crate::windows::open(&handle, &sticky).await {
                         eprintln!("[floaty] tray new-sticky open failed: {}", e);
                     }
-                    refresh_menu(&handle);
+                    refresh_menu(&handle).await;
                 }
                 Err(e) => eprintln!("[floaty] tray new-sticky create failed: {}", e),
             }
@@ -118,7 +129,7 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
                         if let Err(e) = crate::windows::show(&handle, &sticky_id, &db).await {
                             eprintln!("[floaty] tray show failed: {}", e);
                         }
-                        refresh_menu(&handle);
+                        refresh_menu(&handle).await;
                     } else if let Some(w) = handle.get_webview_window(&crate::windows::label(&sticky_id)) {
                         if let Err(e) = w.set_focus() {
                             eprintln!("[floaty] tray focus failed: {}", e);
