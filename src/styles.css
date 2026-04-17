@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sticky-bg: #FFDC96;
+  --sticky-fg: #3a2e10;
+  --sticky-opacity: 0.85;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  color: var(--sticky-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
