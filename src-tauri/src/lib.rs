@@ -1,13 +1,8 @@
 use tauri::Manager;
 
+mod commands;
 mod db;
 mod error;
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,7 +17,10 @@ pub fn run() {
             app.manage(pool);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            commands::stickies::get_or_create_default_sticky,
+            commands::stickies::list_stickies,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
