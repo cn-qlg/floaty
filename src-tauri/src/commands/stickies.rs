@@ -1,14 +1,16 @@
 use crate::db::{self, stickies::{Sticky, StickyPatch}, Db};
 use crate::error::AppResult;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
-pub async fn get_or_create_default_sticky(db: State<'_, Db>) -> AppResult<Sticky> {
+pub async fn get_or_create_default_sticky(app: AppHandle, db: State<'_, Db>) -> AppResult<Sticky> {
     let visible = db::stickies::list_visible(&db).await?;
     if let Some(s) = visible.into_iter().next() {
         return Ok(s);
     }
-    db::stickies::create_default(&db).await
+    let s = db::stickies::create_default(&db).await?;
+    crate::tray::refresh_menu(&app);
+    Ok(s)
 }
 
 #[tauri::command]
@@ -27,16 +29,27 @@ pub async fn get_sticky(db: State<'_, Db>, id: String) -> AppResult<Sticky> {
 }
 
 #[tauri::command]
-pub async fn create_sticky(db: State<'_, Db>) -> AppResult<Sticky> {
-    db::stickies::create_default(&db).await
+pub async fn create_sticky(app: AppHandle, db: State<'_, Db>) -> AppResult<Sticky> {
+    let s = db::stickies::create_default(&db).await?;
+    crate::tray::refresh_menu(&app);
+    Ok(s)
 }
 
 #[tauri::command]
-pub async fn update_sticky(db: State<'_, Db>, id: String, patch: StickyPatch) -> AppResult<Sticky> {
-    db::stickies::update(&db, &id, patch).await
+pub async fn update_sticky(
+    app: AppHandle,
+    db: State<'_, Db>,
+    id: String,
+    patch: StickyPatch,
+) -> AppResult<Sticky> {
+    let s = db::stickies::update(&db, &id, patch).await?;
+    crate::tray::refresh_menu(&app);
+    Ok(s)
 }
 
 #[tauri::command]
-pub async fn delete_sticky(db: State<'_, Db>, id: String) -> AppResult<()> {
-    db::stickies::delete(&db, &id).await
+pub async fn delete_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> AppResult<()> {
+    db::stickies::delete(&db, &id).await?;
+    crate::tray::refresh_menu(&app);
+    Ok(())
 }

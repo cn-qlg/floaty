@@ -1,11 +1,10 @@
-use crate::db::{self, Db};
+use crate::db::{self, stickies::Sticky, Db};
 use tauri::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
-    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
     AppHandle, Manager,
 };
 
-/// 初始化 tray。点击时重建菜单（拿到最新便签列表）。
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let menu = build_menu(app)?;
     let icon = app
@@ -19,19 +18,19 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(on_menu_event)
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                ..
-            } = event
-            {
-                if let Ok(menu) = build_menu(tray.app_handle()) {
-                    let _ = tray.set_menu(Some(menu));
-                }
-            }
-        })
         .build(app)?;
     Ok(())
+}
+
+/// Rebuild the tray menu from current DB state. Call after any sticky mutation.
+pub fn refresh_menu(app: &AppHandle) {
+    if let Some(tray) = app.tray_by_id("floaty-tray") {
+        if let Ok(menu) = build_menu(app) {
+            if let Err(e) = tray.set_menu(Some(menu)) {
+                eprintln!("[floaty] tray refresh failed: {}", e);
+            }
+        }
+    }
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -49,12 +48,12 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )?;
     menu.append(&heading)?;
 
-    for s in &all {
+    for (i, s) in all.iter().enumerate() {
         let label = if s.hidden == 1 {
-            format!("· 显示：{}", sticky_display_name(s))
+            format!("· 显示：{}", sticky_display_name(s, i))
         } else {
             let pin = if s.pinned == 1 { "📌 " } else { "" };
-            format!("{}{}", pin, sticky_display_name(s))
+            format!("{}{}", pin, sticky_display_name(s, i))
         };
         let item = MenuItem::with_id(
             app,
@@ -84,9 +83,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
-fn sticky_display_name(s: &crate::db::stickies::Sticky) -> String {
+fn sticky_display_name(s: &Sticky, index: usize) -> String {
     if s.title.is_empty() {
-        format!("便签 {}", &s.id[..6])
+        format!("便签 #{}", index + 1)
     } else {
         s.title.clone()
     }
@@ -98,8 +97,14 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         let handle = app.clone();
         tauri::async_runtime::spawn(async move {
             let db = handle.state::<Db>();
-            if let Ok(sticky) = db::stickies::create_default(&db).await {
-                let _ = crate::windows::open(&handle, &sticky).await;
+            match db::stickies::create_default(&db).await {
+                Ok(sticky) => {
+                    if let Err(e) = crate::windows::open(&handle, &sticky).await {
+                        eprintln!("[floaty] tray new-sticky open failed: {}", e);
+                    }
+                    refresh_menu(&handle);
+                }
+                Err(e) => eprintln!("[floaty] tray new-sticky create failed: {}", e),
             }
         });
     } else if let Some(sticky_id) = id.strip_prefix("sticky:") {
@@ -107,12 +112,25 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         let sticky_id = sticky_id.to_string();
         tauri::async_runtime::spawn(async move {
             let db = handle.state::<Db>();
-            if let Ok(s) = db::stickies::get(&db, &sticky_id).await {
-                if s.hidden == 1 {
-                    let _ = crate::windows::show(&handle, &sticky_id, &db).await;
-                } else if let Some(w) = handle.get_webview_window(&crate::windows::label(&sticky_id)) {
-                    let _ = w.set_focus();
+            match db::stickies::get(&db, &sticky_id).await {
+                Ok(s) => {
+                    if s.hidden == 1 {
+                        if let Err(e) = crate::windows::show(&handle, &sticky_id, &db).await {
+                            eprintln!("[floaty] tray show failed: {}", e);
+                        }
+                        refresh_menu(&handle);
+                    } else if let Some(w) = handle.get_webview_window(&crate::windows::label(&sticky_id)) {
+                        if let Err(e) = w.set_focus() {
+                            eprintln!("[floaty] tray focus failed: {}", e);
+                        }
+                    } else {
+                        // Window missing despite hidden=0; reopen.
+                        if let Err(e) = crate::windows::open(&handle, &s).await {
+                            eprintln!("[floaty] tray reopen failed: {}", e);
+                        }
+                    }
                 }
+                Err(e) => eprintln!("[floaty] tray get failed: {}", e),
             }
         });
     }

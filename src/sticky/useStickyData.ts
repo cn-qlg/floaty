@@ -41,5 +41,5 @@ export function useStickyData(stickyId: string) {
     }, 300);
   }, [sticky]);
 
-  return { sticky, markdown, loaded, save };
+  return { sticky, setSticky, markdown, loaded, save };
 }

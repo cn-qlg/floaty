@@ -7,13 +7,22 @@ interface StickyPageProps {
 }
 
 export function StickyPage({ stickyId }: StickyPageProps) {
-  const { sticky, markdown, loaded, save } = useStickyData(stickyId);
+  const { sticky, setSticky, markdown, loaded, save } = useStickyData(stickyId);
 
   if (!loaded || !sticky) {
     return <div className="h-screen bg-yellow-100 p-3 text-xs opacity-60">Loading...</div>;
   }
 
   const pinned = sticky.pinned === 1;
+
+  const onTogglePin = async () => {
+    try {
+      const next = await ipc.togglePin(stickyId);
+      setSticky({ ...sticky, pinned: next ? 1 : 0 });
+    } catch (err) {
+      console.error("[floaty] togglePin failed:", err);
+    }
+  };
 
   return (
     <div
@@ -32,9 +41,10 @@ export function StickyPage({ stickyId }: StickyPageProps) {
         </strong>
         <div className="flex items-center gap-2">
           <button
-            className={`text-[11px] px-1 rounded ${pinned ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
-            onClick={() => ipc.togglePin(stickyId)}
-            title={pinned ? "取消置顶" : "置顶"}
+            className={`text-[11px] px-1 rounded transition-opacity ${pinned ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
+            onClick={onTogglePin}
+            title={pinned ? "已置顶（点击取消）" : "置顶"}
+            style={{ filter: pinned ? "drop-shadow(0 0 2px rgba(239, 68, 68, 0.6))" : "none" }}
           >
             📌
           </button>
