@@ -20,6 +20,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::stickies::get_or_create_default_sticky,
             commands::stickies::list_stickies,
+            commands::stickies::list_all_stickies,
+            commands::stickies::get_sticky,
+            commands::stickies::create_sticky,
+            commands::stickies::update_sticky,
+            commands::stickies::delete_sticky,
             commands::items::list_items,
             commands::items::upsert_item,
             commands::items::toggle_item,
