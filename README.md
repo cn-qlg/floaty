@@ -1,7 +1,21 @@
-# Tauri + React + Typescript
+# Floaty
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+macOS 桌面便签式 todo 工具。每个清单一个独立浮动窗口，markdown WYSIWYG，时间紧急度配色，提醒。
 
-## Recommended IDE Setup
+**当前进度：Phase 1（单便签 MVP）**
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## 开发
+
+```bash
+npm install
+npm run tauri dev      # 启动桌面 app
+npm test               # 跑前端测试
+cd src-tauri && cargo test --lib && cd ..  # 跑后端测试
+```
+
+数据存储位置（macOS）：`~/Library/Application Support/ai.kaito.floaty/floaty.db`
+
+## 设计文档
+
+- Spec: `docs/superpowers/specs/2026-04-17-floaty-design.md`
+- Phase 1 plan: `docs/superpowers/plans/2026-04-17-floaty-phase-1-foundation.md`
