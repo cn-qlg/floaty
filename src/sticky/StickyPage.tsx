@@ -21,10 +21,10 @@ export function StickyPage() {
     >
       <div
         data-tauri-drag-region
-        className="flex items-center justify-between px-3 py-1.5 text-xs opacity-70 border-b border-black/5 select-none cursor-default"
+        className="flex items-center justify-between px-3 py-1.5 text-xs opacity-70 border-b border-black/5 select-none cursor-grab active:cursor-grabbing"
       >
-        <strong>📋 Floaty</strong>
-        <span className="text-[10px]">⚙️</span>
+        <strong data-tauri-drag-region className="pointer-events-none">📋 Floaty</strong>
+        <span data-tauri-drag-region className="text-[10px] pointer-events-none">⚙️</span>
       </div>
       <div className="flex-1 overflow-auto p-3">
         <Editor initialMarkdown={markdown} onChange={save} />
