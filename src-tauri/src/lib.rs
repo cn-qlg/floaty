@@ -49,6 +49,14 @@ pub fn run() {
             commands::windows::toggle_pin,
             commands::windows::new_sticky_window,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            // 便签全部关掉时不退出；保持 tray 常驻，用户可随时从菜单栏恢复/新建
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
+                if code.is_none() {
+                    api.prevent_exit();
+                }
+            }
+        });
 }

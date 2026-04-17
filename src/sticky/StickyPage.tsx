@@ -36,20 +36,28 @@ export function StickyPage({ stickyId }: StickyPageProps) {
         data-tauri-drag-region
         className="flex items-center justify-between px-3 py-1.5 text-xs border-b border-black/5 select-none cursor-grab active:cursor-grabbing"
       >
-        <strong data-tauri-drag-region className="pointer-events-none opacity-70">
-          📋 Floaty
+        <strong data-tauri-drag-region className="pointer-events-none opacity-70 flex items-center gap-1.5">
+          <span>📋 Floaty</span>
+          {pinned && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-[1px] rounded bg-red-500 text-white">
+              已置顶
+            </span>
+          )}
         </strong>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
-            className={`text-[11px] px-1 rounded transition-opacity ${pinned ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
+            className={
+              pinned
+                ? "text-[12px] w-6 h-5 rounded bg-red-500 text-white shadow-sm"
+                : "text-[12px] w-6 h-5 rounded opacity-40 hover:opacity-80 hover:bg-black/5"
+            }
             onClick={onTogglePin}
             title={pinned ? "已置顶（点击取消）" : "置顶"}
-            style={{ filter: pinned ? "drop-shadow(0 0 2px rgba(239, 68, 68, 0.6))" : "none" }}
           >
             📌
           </button>
           <button
-            className="text-[11px] px-1 rounded opacity-40 hover:opacity-70"
+            className="text-[11px] w-6 h-5 rounded opacity-40 hover:opacity-80 hover:bg-black/5"
             onClick={() => ipc.hideSticky(stickyId)}
             title="关闭（不删除，可从菜单栏恢复）"
           >
