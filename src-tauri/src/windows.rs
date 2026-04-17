@@ -21,9 +21,11 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
     }
 
     let url = format!("index.html#/sticky/{}", sticky.id);
+    // 防御式 clamp：如果过去因 bug 存了异常大的"逻辑尺寸"，重置为默认
+    let (w, h) = sanitize_size(sticky.w, sticky.h);
     let mut builder = WebviewWindowBuilder::new(app, &lbl, WebviewUrl::App(url.into()))
         .title("Floaty")
-        .inner_size(sticky.w as f64, sticky.h as f64)
+        .inner_size(w as f64, h as f64)
         .resizable(true)
         .decorations(false)
         .transparent(true)
@@ -31,7 +33,9 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
         .visible(true);
 
     if let (Some(x), Some(y)) = (sticky.x, sticky.y) {
-        builder = builder.position(x as f64, y as f64);
+        if let Some((sx, sy)) = sanitize_position(x, y) {
+            builder = builder.position(sx as f64, sy as f64);
+        }
     }
 
     let window = builder
@@ -108,28 +112,48 @@ pub async fn restore_on_startup(app: &AppHandle, db: &Db) -> AppResult<()> {
     Ok(())
 }
 
-/// 绑定 Move/Resize → 写回 DB。
+/// 合理性 clamp：sticky 宽高应在 [200, 1600] 之间，否则重置为默认 320×420
+fn sanitize_size(w: i64, h: i64) -> (i64, i64) {
+    let w_ok = (200..=1600).contains(&w);
+    let h_ok = (200..=1600).contains(&h);
+    (if w_ok { w } else { 320 }, if h_ok { h } else { 420 })
+}
+
+/// 合理性 clamp：坐标不应离谱（例如 > 20000）；否则不设置（让系统默认位置）
+fn sanitize_position(x: i64, y: i64) -> Option<(i64, i64)> {
+    if (-20000..=20000).contains(&x) && (-20000..=20000).contains(&y) {
+        Some((x, y))
+    } else {
+        None
+    }
+}
+
+/// 绑定 Move/Resize → 写回 DB。关键：Tauri 窗口 getter 返回 **物理像素**，
+/// 但 WebviewWindowBuilder 接收 **逻辑像素**。保存前必须除以 scale_factor，
+/// 否则 Retina 屏下 DB 存成 2× 大小，下次打开窗口变巨大/跑屏幕外。
 fn attach_geometry_listener(window: &WebviewWindow, sticky_id: String) -> AppResult<()> {
     let app = window.app_handle().clone();
     let label = window.label().to_string();
     window.on_window_event(move |event| {
         use tauri::WindowEvent;
+        let Some(win) = app.get_webview_window(&label) else { return; };
+        let scale = win.scale_factor().unwrap_or(1.0);
         let (x, y, w, h) = match event {
             WindowEvent::Moved(pos) => {
-                let w = app.get_webview_window(&label);
-                let size = w.as_ref().and_then(|w| w.inner_size().ok());
-                let (width, height) = size
+                let logical_pos = pos.to_logical::<f64>(scale);
+                let size = win.inner_size().ok().map(|s| s.to_logical::<f64>(scale));
+                let (lw, lh) = size
                     .map(|s| (s.width as i64, s.height as i64))
                     .unwrap_or((320, 420));
-                (pos.x as i64, pos.y as i64, width, height)
+                (logical_pos.x as i64, logical_pos.y as i64, lw, lh)
             }
             WindowEvent::Resized(size) => {
-                let w = app.get_webview_window(&label);
-                let pos = w.as_ref().and_then(|w| w.outer_position().ok());
-                let (x, y) = pos
+                let logical_size = size.to_logical::<f64>(scale);
+                let pos = win.outer_position().ok().map(|p| p.to_logical::<f64>(scale));
+                let (lx, ly) = pos
                     .map(|p| (p.x as i64, p.y as i64))
                     .unwrap_or((0, 0));
-                (x, y, size.width as i64, size.height as i64)
+                (lx, ly, logical_size.width as i64, logical_size.height as i64)
             }
             _ => return,
         };
