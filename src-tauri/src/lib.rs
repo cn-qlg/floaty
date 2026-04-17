@@ -3,6 +3,7 @@ use tauri::Manager;
 mod commands;
 mod db;
 mod error;
+mod tray;
 mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +24,8 @@ pub fn run() {
                     eprintln!("[floaty] restore_on_startup failed: {}", e);
                 }
             });
+
+            tray::init(app.handle()).expect("tray init");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
