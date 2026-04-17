@@ -55,6 +55,77 @@ pub async fn list_visible(db: &Db) -> AppResult<Vec<Sticky>> {
     Ok(rows)
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct StickyPatch {
+    pub title: Option<String>,
+    pub x: Option<i64>,
+    pub y: Option<i64>,
+    pub w: Option<i64>,
+    pub h: Option<i64>,
+    pub pinned: Option<i64>,
+    pub bg_color: Option<String>,
+    pub opacity: Option<f64>,
+    pub font_size: Option<i64>,
+    pub font_color: Option<String>,
+    pub z_order: Option<i64>,
+    pub hidden: Option<i64>,
+}
+
+pub async fn list_all(db: &Db) -> AppResult<Vec<Sticky>> {
+    let rows = sqlx::query_as::<_, Sticky>(
+        "SELECT * FROM stickies ORDER BY z_order ASC, created_at ASC",
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(rows)
+}
+
+pub async fn update(db: &Db, id: &str, patch: StickyPatch) -> AppResult<Sticky> {
+    let now = chrono::Utc::now().timestamp_millis();
+    sqlx::query(
+        "UPDATE stickies SET
+            title = COALESCE(?, title),
+            x = COALESCE(?, x),
+            y = COALESCE(?, y),
+            w = COALESCE(?, w),
+            h = COALESCE(?, h),
+            pinned = COALESCE(?, pinned),
+            bg_color = COALESCE(?, bg_color),
+            opacity = COALESCE(?, opacity),
+            font_size = COALESCE(?, font_size),
+            font_color = COALESCE(?, font_color),
+            z_order = COALESCE(?, z_order),
+            hidden = COALESCE(?, hidden),
+            updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(patch.title)
+    .bind(patch.x)
+    .bind(patch.y)
+    .bind(patch.w)
+    .bind(patch.h)
+    .bind(patch.pinned)
+    .bind(patch.bg_color)
+    .bind(patch.opacity)
+    .bind(patch.font_size)
+    .bind(patch.font_color)
+    .bind(patch.z_order)
+    .bind(patch.hidden)
+    .bind(now)
+    .bind(id)
+    .execute(db)
+    .await?;
+    get(db, id).await
+}
+
+pub async fn delete(db: &Db, id: &str) -> AppResult<()> {
+    sqlx::query("DELETE FROM stickies WHERE id = ?")
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,5 +168,48 @@ mod tests {
         let visible = list_visible(&pool).await.unwrap();
         assert_eq!(visible.len(), 1);
         assert_ne!(visible[0].id, a.id);
+    }
+
+    #[tokio::test]
+    async fn update_applies_patch() {
+        let pool = test_pool().await;
+        let s = create_default(&pool).await.unwrap();
+        let updated = update(&pool, &s.id, StickyPatch {
+            title: Some("work".into()),
+            x: Some(100),
+            y: Some(200),
+            pinned: Some(1),
+            ..Default::default()
+        }).await.unwrap();
+        assert_eq!(updated.title, "work");
+        assert_eq!(updated.x, Some(100));
+        assert_eq!(updated.y, Some(200));
+        assert_eq!(updated.pinned, 1);
+        assert_eq!(updated.w, 320);
+    }
+
+    #[tokio::test]
+    async fn list_all_includes_hidden() {
+        let pool = test_pool().await;
+        let a = create_default(&pool).await.unwrap();
+        let _b = create_default(&pool).await.unwrap();
+        update(&pool, &a.id, StickyPatch { hidden: Some(1), ..Default::default() })
+            .await.unwrap();
+        let all = list_all(&pool).await.unwrap();
+        assert_eq!(all.len(), 2);
+        let visible = list_visible(&pool).await.unwrap();
+        assert_eq!(visible.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn delete_cascades_items() {
+        let pool = test_pool().await;
+        let s = create_default(&pool).await.unwrap();
+        sqlx::query("INSERT INTO items (id, sticky_id, content_md, sort_order, created_at, updated_at) VALUES ('i1', ?, 'x', 0, 0, 0)")
+            .bind(&s.id).execute(&pool).await.unwrap();
+        delete(&pool, &s.id).await.unwrap();
+        let items: Vec<(String,)> = sqlx::query_as("SELECT id FROM items WHERE sticky_id = ?")
+            .bind(&s.id).fetch_all(&pool).await.unwrap();
+        assert!(items.is_empty(), "ON DELETE CASCADE should remove items");
     }
 }
