@@ -27,15 +27,25 @@ ul[data-type="taskList"] {
 ul[data-type="taskList"] li {
   display: flex;
   gap: 0.5rem;
-  align-items: flex-start;
+  align-items: baseline;
   margin: 2px 0;
 }
 ul[data-type="taskList"] li > label {
-  margin-top: 3px;
   user-select: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+}
+ul[data-type="taskList"] li > label > input[type="checkbox"] {
+  margin: 0;
+  vertical-align: middle;
 }
 ul[data-type="taskList"] li > div {
   flex: 1;
+}
+ul[data-type="taskList"] li > div p {
+  margin: 0;
+  line-height: 1.5;
 }
 ul[data-type="taskList"] li[data-checked="true"] > div {
   opacity: 0.5;

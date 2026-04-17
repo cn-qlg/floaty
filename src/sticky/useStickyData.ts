@@ -11,13 +11,17 @@ export function useStickyData() {
 
   useEffect(() => {
     (async () => {
-      const s = await ipc.getOrCreateDefaultSticky();
-      setSticky(s);
-      const items = await ipc.listItems(s.id);
-      const combined = items.map((i) => i.content_md).join("\n");
-      setMarkdown(combined || "- [ ] ");
-      itemIdRef.current = items[0]?.id ?? null;
-      setLoaded(true);
+      try {
+        const s = await ipc.getOrCreateDefaultSticky();
+        setSticky(s);
+        const items = await ipc.listItems(s.id);
+        const combined = items.map((i) => i.content_md).join("\n");
+        setMarkdown(combined || "- [ ] ");
+        itemIdRef.current = items[0]?.id ?? null;
+        setLoaded(true);
+      } catch (err) {
+        console.error("[floaty] sticky load failed:", err);
+      }
     })();
   }, []);
 

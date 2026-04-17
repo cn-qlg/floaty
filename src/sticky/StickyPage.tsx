@@ -5,7 +5,7 @@ export function StickyPage() {
   const { sticky, markdown, loaded, save } = useStickyData();
 
   if (!loaded || !sticky) {
-    return <div className="p-3 text-xs opacity-60">Loading...</div>;
+    return <div className="h-screen bg-yellow-100 p-3 text-xs opacity-60">Loading...</div>;
   }
 
   const bgColor = sticky.bg_color;
