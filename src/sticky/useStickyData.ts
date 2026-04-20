@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { ipc } from "../ipc/client";
 import type { Sticky } from "../ipc/types";
+import { extractDues } from "../editor/markdown";
 
 export function useStickyData(stickyId: string) {
   const [sticky, setSticky] = useState<Sticky | null>(null);
@@ -38,6 +39,19 @@ export function useStickyData(stickyId: string) {
         sort_order: 0,
       });
       itemIdRef.current = item.id;
+
+      // 同步 reminders：从 markdown 里提取所有 @due token
+      try {
+        const dues = extractDues(md);
+        const entries = dues.map((d) => ({
+          item_index: d.itemIndex,
+          text_preview: d.preview,
+          fire_at: new Date(d.iso).getTime(),
+        }));
+        await ipc.syncReminders(sticky.id, entries);
+      } catch (err) {
+        console.error("[floaty] syncReminders failed:", err);
+      }
     }, 300);
   }, [sticky]);
 
