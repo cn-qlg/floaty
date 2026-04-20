@@ -52,19 +52,25 @@ export function SettingsPopover({ sticky, onPatch, onClose }: SettingsPopoverPro
 
   return (
     <div
-      className="absolute top-[34px] right-2 z-10 w-[260px] rounded-lg shadow-xl border border-black/10"
-      style={{ backgroundColor: "rgba(255,255,255,0.96)", color: "#333" }}
+      className="absolute top-[34px] left-2 right-2 z-10 rounded-lg shadow-xl border border-black/10 overflow-hidden flex flex-col"
+      style={{
+        backgroundColor: "rgba(255,255,255,0.96)",
+        color: "#333",
+        maxHeight: "calc(100vh - 44px)",
+        maxWidth: "280px",
+        marginLeft: "auto",
+      }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-black/5">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-black/5 flex-shrink-0">
         <strong className="text-xs">外观设置</strong>
         <button className="text-xs opacity-60 hover:opacity-100" onClick={onClose}>
           ✕
         </button>
       </div>
 
-      <div className="p-3 space-y-3 text-xs">
+      <div className="p-3 space-y-3 text-xs overflow-y-auto">
         {/* 背景色 */}
         <div>
           <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">背景色</div>
@@ -140,27 +146,41 @@ export function SettingsPopover({ sticky, onPatch, onClose }: SettingsPopoverPro
         {/* 字体颜色 */}
         <div>
           <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">字体颜色</div>
-          <label className="flex items-center gap-2 mb-1.5 cursor-pointer">
+          <div className="flex gap-1 mb-2">
+            <button
+              className={`flex-1 h-6 rounded border text-[11px] ${
+                fontColorAuto
+                  ? "border-black/40 bg-black/5 font-medium"
+                  : "border-black/10 hover:bg-black/5"
+              }`}
+              onClick={() => toggleAuto(true)}
+            >
+              自动
+            </button>
+            <button
+              className={`flex-1 h-6 rounded border text-[11px] ${
+                !fontColorAuto
+                  ? "border-black/40 bg-black/5 font-medium"
+                  : "border-black/10 hover:bg-black/5"
+              }`}
+              onClick={() => toggleAuto(false)}
+            >
+              自定义
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
             <input
-              type="checkbox"
-              checked={fontColorAuto}
-              onChange={(e) => toggleAuto(e.target.checked)}
+              type="color"
+              value={sticky.font_color ?? autoFg(sticky.bg_color)}
+              disabled={fontColorAuto}
+              onChange={(e) => onPatch({ font_color: e.target.value.toUpperCase() })}
+              className="h-6 w-10 rounded cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <span>自动跟随背景明暗</span>
-          </label>
-          {!fontColorAuto && (
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={sticky.font_color ?? "#3a2e10"}
-                onChange={(e) => onPatch({ font_color: e.target.value.toUpperCase() })}
-                className="h-6 w-10 rounded cursor-pointer"
-              />
-              <span className="font-mono text-[10px] opacity-70">
-                {sticky.font_color ?? "#3a2e10"}
-              </span>
-            </div>
-          )}
+            <span className="font-mono text-[10px] opacity-70">
+              {(sticky.font_color ?? autoFg(sticky.bg_color)).toUpperCase()}
+              {fontColorAuto && <span className="ml-1 opacity-60">（自动）</span>}
+            </span>
+          </div>
         </div>
 
         {/* 重置 */}

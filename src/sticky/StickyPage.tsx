@@ -63,14 +63,13 @@ export function StickyPage({ stickyId }: StickyPageProps) {
       className="h-screen flex flex-col backdrop-blur-md relative"
       style={{
         backgroundColor: hexWithAlpha(sticky.bg_color, sticky.opacity),
-        color: fg,
-        fontSize: `${sticky.font_size}px`,
       }}
       onClick={() => settingsOpen && setSettingsOpen(false)}
     >
       <div
         data-tauri-drag-region
         className="flex items-center justify-between px-3 py-1.5 text-xs border-b border-black/5 select-none cursor-grab active:cursor-grabbing"
+        style={{ color: autoFg(sticky.bg_color) }}
       >
         <strong data-tauri-drag-region className="pointer-events-none opacity-70 flex items-center gap-1.5">
           <span>📋 Floaty</span>
@@ -122,7 +121,10 @@ export function StickyPage({ stickyId }: StickyPageProps) {
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-3">
+      <div
+        className="flex-1 overflow-auto p-3"
+        style={{ color: fg, fontSize: `${sticky.font_size}px` }}
+      >
         <Editor initialMarkdown={markdown} onChange={save} />
       </div>
       {settingsOpen && (
