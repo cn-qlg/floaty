@@ -93,6 +93,44 @@ export function markdownToDoc(md: string): ProseDoc {
 }
 
 const DUE_RE = /@due:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/;
+const DUE_RE_GLOBAL = /@due:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/g;
+
+export interface DueEntry {
+  itemIndex: number;
+  iso: string;
+  preview: string;
+}
+
+/**
+ * 扫描 markdown，每行可能出现一个或多个 @due:ISO token。
+ * 每条 todo/段落的 `itemIndex` 是它在原 markdown 里的行号（0-based，跳过空行）。
+ * preview 是该行文本去掉 markdown 装饰后的前 50 字（供通知展示）。
+ */
+export function extractDues(md: string): DueEntry[] {
+  const entries: DueEntry[] = [];
+  const lines = md.split("\n");
+  let nonEmptyIndex = 0;
+  for (const line of lines) {
+    if (line.trim() === "") continue;
+    const matches = [...line.matchAll(DUE_RE_GLOBAL)];
+    if (matches.length > 0) {
+      const preview = line
+        .replace(DUE_RE_GLOBAL, "")
+        .replace(/^- \[[ x]\] /, "")
+        .replace(/^#+\s+/, "")
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\*(.+?)\*/g, "$1")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .trim()
+        .slice(0, 50);
+      for (const m of matches) {
+        entries.push({ itemIndex: nonEmptyIndex, iso: m[1], preview });
+      }
+    }
+    nonEmptyIndex++;
+  }
+  return entries;
+}
 
 function parseInline(text: string): ProseNode[] {
   const tokens: ProseNode[] = [];

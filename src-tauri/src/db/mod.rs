@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub mod migrations;
 pub mod stickies;
 pub mod items;
+pub mod reminders;
 
 pub type Db = SqlitePool;
 

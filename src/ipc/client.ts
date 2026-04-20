@@ -49,4 +49,12 @@ export const ipc = {
 
   newStickyWindow: (): Promise<string> =>
     invoke("new_sticky_window"),
+
+  syncReminders: (
+    stickyId: string,
+    entries: { item_index: number; text_preview: string; fire_at: number }[],
+  ): Promise<void> => invoke("sync_reminders", { stickyId, entries }),
+
+  snoozeReminder: (id: string, minutes: number): Promise<void> =>
+    invoke("snooze_reminder", { id, minutes }),
 };

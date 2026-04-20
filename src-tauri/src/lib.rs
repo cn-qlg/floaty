@@ -3,6 +3,7 @@ use tauri::Manager;
 mod commands;
 mod db;
 mod error;
+mod reminders;
 mod tray;
 mod windows;
 
@@ -10,6 +11,7 @@ mod windows;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -20,6 +22,10 @@ pub fn run() {
                 db::init(data_dir).await.expect("db init")
             });
             app.manage(pool.clone());
+
+            let scheduler = reminders::Scheduler::new();
+            app.manage(scheduler.clone());
+            scheduler.spawn_loop(app.handle().clone());
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -49,6 +55,8 @@ pub fn run() {
             commands::windows::toggle_pin,
             commands::windows::show_all_stickies,
             commands::windows::new_sticky_window,
+            commands::reminders::sync_reminders,
+            commands::reminders::snooze_reminder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
