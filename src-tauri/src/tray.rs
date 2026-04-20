@@ -79,16 +79,19 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
     let hidden_count = all.iter().filter(|s| s.hidden == 1).count();
-    if hidden_count > 0 {
-        let show_all_item = MenuItem::with_id(
-            app,
-            "show-all",
-            format!("👁  显示全部（{} 隐藏）", hidden_count),
-            true,
-            None::<&str>,
-        )?;
-        menu.append(&show_all_item)?;
-    }
+    let show_all_label = if hidden_count > 0 {
+        format!("👁  显示全部（{} 张隐藏）", hidden_count)
+    } else {
+        "👁  显示全部（无隐藏）".to_string()
+    };
+    let show_all_item = MenuItem::with_id(
+        app,
+        "show-all",
+        show_all_label,
+        hidden_count > 0,
+        None::<&str>,
+    )?;
+    menu.append(&show_all_item)?;
 
     let new_item = MenuItem::with_id(
         app,
