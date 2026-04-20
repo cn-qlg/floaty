@@ -132,10 +132,17 @@ describe("parseTimeHint — today with time", () => {
     expect(h?.date.getHours()).toBe(15);
   });
 
-  it("今天 8 点 已过 → 明天 8:00", () => {
+  it("今天 8 点 已过 → 仍然是今天 8:00（用户明确说了今天）", () => {
     const nowAfternoon = new Date(2026, 3, 20, 14, 0);
     const h = parseTimeHint("吃饭 今天 8 点", nowAfternoon);
-    expect(h?.date.getDate()).toBe(21);
+    expect(h?.date.getDate()).toBe(20);
+    expect(h?.date.getHours()).toBe(8);
+  });
+
+  it("今天早上 已过 → 仍然是今天 08:00", () => {
+    const nowAfternoon = new Date(2026, 3, 20, 14, 0);
+    const h = parseTimeHint("吃饭 今天早上", nowAfternoon);
+    expect(h?.date.getDate()).toBe(20);
     expect(h?.date.getHours()).toBe(8);
   });
 });

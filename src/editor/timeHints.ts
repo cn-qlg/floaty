@@ -174,7 +174,7 @@ function matchTodayWithTime(text: string, now: Date): TimeHint | null {
   if (period === "上午" && hour === 12) hour = 0;
   const d = new Date(now);
   d.setHours(hour, minute, 0, 0);
-  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+  // 用户明确说了"今天"：保留当天，即使时间已过（可能是在补记过去发生的事或设成立即到期提醒）
   return toHint(m, d);
 }
 
@@ -186,7 +186,7 @@ function matchTodayPeriodOnly(text: string, now: Date): TimeHint | null {
   const hour = hourMap[m[2]] ?? 18;
   const d = new Date(now);
   d.setHours(hour, 0, 0, 0);
-  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+  // 同上：今天一定是今天
   return toHint(m, d);
 }
 
