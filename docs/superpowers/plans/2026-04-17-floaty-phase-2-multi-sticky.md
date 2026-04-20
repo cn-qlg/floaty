@@ -13,7 +13,7 @@
 ## 前置状态
 
 - Branch: `main` (Phase 1 已合并，HEAD: `d8314b4`)
-- 所有命令默认从 `/Users/liuguoqing/Codes/OpenSource/floaty/` 执行
+- 所有命令默认从 `<project-root>/` 执行
 - Git author `cn_qlg <cn_qlg@163.com>` 已配置
 - 执行前：`git checkout -b phase-2-multi-sticky`
 

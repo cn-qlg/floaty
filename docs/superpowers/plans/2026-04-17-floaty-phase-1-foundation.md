@@ -12,9 +12,9 @@
 
 ## Pre-flight: 项目目录与基线
 
-**当前状态：** 仓库已 `git init`，含 `docs/superpowers/specs/2026-04-17-floaty-design.md`，工作目录 `/Users/liuguoqing/Codes/OpenSource/floaty/`。Git author 已配置为 `cn_qlg <cn_qlg@163.com>`。`.gitignore` 已含 `node_modules/`、`dist/`、`target/`、`.superpowers/`、`.DS_Store`、`*.log`。
+**当前状态：** 仓库已 `git init`，含 `docs/superpowers/specs/2026-04-17-floaty-design.md`，工作目录 `<project-root>/`。Git author 已配置为 `cn_qlg <cn_qlg@163.com>`。`.gitignore` 已含 `node_modules/`、`dist/`、`target/`、`.superpowers/`、`.DS_Store`、`*.log`。
 
-**所有命令默认从仓库根 `/Users/liuguoqing/Codes/OpenSource/floaty/` 执行。** 每个 task 的 commit 都用 `cn_qlg <cn_qlg@163.com>` 作为 author（已是本地 git 默认）。
+**所有命令默认从仓库根 `<project-root>/` 执行。** 每个 task 的 commit 都用 `cn_qlg <cn_qlg@163.com>` 作为 author（已是本地 git 默认）。
 
 ---
 
@@ -78,7 +78,7 @@ floaty/
 - [ ] **Step 1: 在仓库根运行 Tauri 2 模板生成器**
 
 ```bash
-cd /Users/liuguoqing/Codes/OpenSource/floaty
+cd <project-root>
 npm create tauri-app@latest -- floaty --template react-ts --manager npm --identifier app.floaty.desktop
 ```
 
