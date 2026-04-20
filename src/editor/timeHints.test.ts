@@ -164,12 +164,33 @@ describe("parseTimeHint — input-method spaces", () => {
   });
 });
 
+describe("parseTimeHint — middle-of-text matches", () => {
+  it("matches '今天 24 点吃饭' (time mid-sentence)", () => {
+    const h = parseTimeHint("今天 24 点吃饭", now);
+    expect(h?.matchText.replace(/\s+/g, "")).toBe("今天24点");
+    expect(h?.date.getHours()).toBe(0); // 24点 wraps to next day 00:00
+  });
+
+  it("matches '4 月 24 日刷牙' (date mid-sentence)", () => {
+    const h = parseTimeHint("4 月 24 日刷牙", now);
+    expect(h?.date.getMonth()).toBe(3);
+    expect(h?.date.getDate()).toBe(24);
+  });
+
+  it("picks the rightmost match when multiple exist", () => {
+    const h = parseTimeHint("先 30分钟后 再 1小时后", now);
+    expect(h?.matchText).toContain("1小时后");
+  });
+
+  it("reports start/end offsets", () => {
+    const h = parseTimeHint("交稿 30分钟后", now);
+    expect(h?.start).toBe(3);
+    expect(h?.end).toBe(8);
+  });
+});
+
 describe("parseTimeHint — negatives", () => {
   it("returns null for unrelated text", () => {
     expect(parseTimeHint("随便写点什么", now)).toBeNull();
-  });
-
-  it("returns null when time is not anchored at end", () => {
-    expect(parseTimeHint("30分钟后 然后开会", now)).toBeNull();
   });
 });

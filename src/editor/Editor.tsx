@@ -139,10 +139,12 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
         setGhost(null);
         return;
       }
-      const matchLen = hint.matchText.length;
-      const from = sel.from - matchLen;
-      const coords = editor.view.coordsAtPos(sel.from);
-      setGhost({ from, to: sel.from, hint, x: coords.left, y: coords.bottom });
+      // 匹配文本可以不在 cursor 尾部（"今天 24 点吃饭"）：from/to 由 hint.start/end 换算 doc 坐标
+      const paraStart = $from.start();
+      const from = paraStart + hint.start;
+      const to = paraStart + hint.end;
+      const coords = editor.view.coordsAtPos(to);
+      setGhost({ from, to, hint, x: coords.left, y: coords.bottom });
     };
     editor.on("update", update);
     editor.on("selectionUpdate", update);
