@@ -13,6 +13,7 @@ interface StickyPageProps {
 export function StickyPage({ stickyId }: StickyPageProps) {
   const { sticky, setSticky, markdown, loaded, save } = useStickyData(stickyId);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!loaded || !sticky) {
     return <div className="h-screen bg-yellow-100 p-3 text-xs opacity-60">Loading...</div>;
@@ -58,14 +59,17 @@ export function StickyPage({ stickyId }: StickyPageProps) {
     }
   };
 
-  const onDelete = async () => {
-    if (!window.confirm("确定要删除这张便签吗？\n所有内容和提醒都会被永久删除，无法恢复。")) {
-      return;
-    }
+  const requestDelete = () => {
+    setSettingsOpen(false);
+    setConfirmDelete(true);
+  };
+
+  const performDelete = async () => {
     try {
       await ipc.deleteSticky(stickyId);
     } catch (err) {
       console.error("[floaty] deleteSticky failed:", err);
+      setConfirmDelete(false);
     }
   };
 
@@ -143,8 +147,41 @@ export function StickyPage({ stickyId }: StickyPageProps) {
           sticky={sticky}
           onPatch={onPatch}
           onClose={() => setSettingsOpen(false)}
-          onDelete={onDelete}
+          onDelete={requestDelete}
         />
+      )}
+      {confirmDelete && (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+          onClick={() => setConfirmDelete(false)}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl p-3 w-[90%] max-w-[260px] text-xs"
+            style={{ color: "#333" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="font-semibold mb-1">删除这张便签？</div>
+            <div className="opacity-70 mb-3 leading-relaxed">
+              所有内容和提醒会被永久删除，无法恢复。
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                className="px-3 h-7 rounded border border-black/10 hover:bg-black/5"
+                onClick={() => setConfirmDelete(false)}
+              >
+                取消
+              </button>
+              <button
+                className="px-3 h-7 rounded bg-red-500 text-white hover:bg-red-600"
+                onClick={performDelete}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
