@@ -39,12 +39,32 @@ export const DueTime = Node.create({
     ];
   },
 
+  addOptions() {
+    return {
+      onEdit: (_pos: number, _iso: string) => {
+        /* set by Editor via .configure({ onEdit }) */
+      },
+    };
+  },
+
   addNodeView() {
-    return ({ node }) => {
+    return ({ node, getPos, editor }) => {
       const dom = document.createElement("span");
       dom.setAttribute("data-due-time", "true");
       dom.setAttribute("data-datetime", node.attrs.datetime ?? "");
       dom.contentEditable = "false";
+      dom.title = "点击修改时间";
+      dom.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const pos = typeof getPos === "function" ? getPos() : null;
+        const iso = node.attrs.datetime;
+        if (pos != null && iso) {
+          const opts = (editor.extensionManager.extensions.find((x) => x.name === "dueTime")
+            ?.options ?? {}) as { onEdit?: (pos: number, iso: string) => void };
+          opts.onEdit?.(pos, iso);
+        }
+      });
       refreshPillDom(dom);
       return { dom };
     };

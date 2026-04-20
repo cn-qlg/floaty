@@ -13,9 +13,16 @@ interface EditorProps {
   onChange: (markdown: string) => void;
 }
 
+type PickerState =
+  | null
+  | { x: number; y: number; mode: "insert" }
+  | { x: number; y: number; mode: "edit"; pos: number };
+
 export function Editor({ initialMarkdown, onChange }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [picker, setPicker] = useState<{ x: number; y: number } | null>(null);
+  const [picker, setPicker] = useState<PickerState>(null);
+  const pickerRef = useRef<PickerState>(null);
+  pickerRef.current = picker;
 
   const editor = useEditor({
     extensions: [
@@ -23,7 +30,17 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
       TaskList,
       TaskItem.configure({ nested: false }),
       Link.configure({ openOnClick: false }),
-      DueTime,
+      DueTime.configure({
+        onEdit: (pos: number, iso: string) => {
+          const el = containerRef.current?.querySelector<HTMLElement>(
+            `span[data-due-time][data-datetime="${iso}"]`,
+          );
+          const rect = el?.getBoundingClientRect();
+          const x = rect ? rect.left : 20;
+          const y = rect ? rect.bottom + 4 : 20;
+          setPicker(clampToViewport({ x, y, mode: "edit" as const, pos }));
+        },
+      }),
     ],
     content: markdownToDoc(initialMarkdown),
     onUpdate: ({ editor }) => {
@@ -34,7 +51,12 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
       handleKeyDown(view, event) {
         if (event.key === "@" && !event.metaKey && !event.ctrlKey) {
           const coords = view.coordsAtPos(view.state.selection.from);
-          setPicker({ x: coords.left, y: coords.bottom + 4 });
+          setPicker(clampToViewport({ x: coords.left, y: coords.bottom + 4, mode: "insert" as const }));
+          event.preventDefault();
+          return true;
+        }
+        if (event.key === "Escape" && pickerRef.current) {
+          setPicker(null);
           event.preventDefault();
           return true;
         }
@@ -43,9 +65,8 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
     },
   });
 
-  // 每 60s 刷新所有 due-time pill 颜色/文字
+  // 每 60s 刷新所有 pill
   useEffect(() => {
-    if (!containerRef.current) return;
     const tick = () => {
       if (containerRef.current) refreshAllPills(containerRef.current);
     };
@@ -54,9 +75,8 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
     return () => window.clearInterval(id);
   }, [editor]);
 
-  // doc 内容变化后重新应用 pill 样式（新插入的节点初始没有样式）
   useEffect(() => {
-    if (!editor || !containerRef.current) return;
+    if (!editor) return;
     const handler = () => {
       if (containerRef.current) refreshAllPills(containerRef.current);
     };
@@ -70,11 +90,32 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
 
   const handlePick = (iso: string) => {
     if (!editor) return;
-    editor
-      .chain()
-      .focus()
-      .insertContent([{ type: "dueTime", attrs: { datetime: iso } }, { type: "text", text: " " }])
-      .run();
+    const current = pickerRef.current;
+    if (!current) return;
+
+    if (current.mode === "edit") {
+      // 替换原 pill 的 datetime
+      editor
+        .chain()
+        .focus()
+        .setNodeSelection(current.pos)
+        .updateAttributes("dueTime", { datetime: iso })
+        .run();
+    } else {
+      // 插入新 pill；先清掉光标前可能残留的 '@'
+      const { from } = editor.state.selection;
+      if (from > 0) {
+        const char = editor.state.doc.textBetween(from - 1, from);
+        if (char === "@") {
+          editor.chain().focus().deleteRange({ from: from - 1, to: from }).run();
+        }
+      }
+      editor
+        .chain()
+        .focus()
+        .insertContent([{ type: "dueTime", attrs: { datetime: iso } }, { type: "text", text: " " }])
+        .run();
+    }
     setPicker(null);
   };
 
@@ -91,4 +132,15 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
       )}
     </div>
   );
+}
+
+const PICKER_W = 200;
+const PICKER_H = 260;
+
+function clampToViewport<T extends { x: number; y: number }>(p: T): T {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const x = Math.max(8, Math.min(p.x, vw - PICKER_W - 8));
+  const y = p.y + PICKER_H > vh - 8 ? Math.max(8, p.y - PICKER_H - 24) : p.y;
+  return { ...p, x, y } as T;
 }

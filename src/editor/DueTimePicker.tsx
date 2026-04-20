@@ -57,18 +57,26 @@ export function DueTimePicker({ x, y, onPick, onCancel }: DueTimePickerProps) {
 
   return (
     <div
-      className="fixed z-50 w-[200px] rounded-lg shadow-xl border border-black/10 overflow-hidden"
-      style={{ left: x, top: y, backgroundColor: "rgba(255,255,255,0.98)", color: "#333" }}
+      className="fixed z-50 rounded-lg shadow-xl border border-black/10 overflow-hidden flex flex-col"
+      style={{
+        left: x,
+        top: y,
+        width: "200px",
+        maxWidth: "calc(100vw - 16px)",
+        maxHeight: "calc(100vh - 16px)",
+        backgroundColor: "rgba(255,255,255,0.98)",
+        color: "#333",
+      }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-black/5 text-[10px] uppercase tracking-wider opacity-60">
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-black/5 text-[10px] uppercase tracking-wider opacity-60 flex-shrink-0">
         <span>选择截止时间</span>
         <button className="opacity-60 hover:opacity-100" onClick={onCancel} title="取消 (Esc)">
           ✕
         </button>
       </div>
-      <div className="py-1 text-xs">
+      <div className="py-1 text-xs overflow-y-auto">
         {options.map((opt) => (
           <button
             key={opt.label}
