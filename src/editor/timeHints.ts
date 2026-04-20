@@ -142,7 +142,7 @@ function matchAbsoluteMonthDay(text: string, now: Date): TimeHint | null {
   return { matchText: m[0].trim(), date: d };
 }
 
-function matchAbsoluteISO(text: string, now: Date): TimeHint | null {
+function matchAbsoluteISO(text: string, _now: Date): TimeHint | null {
   const m = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s*$/);
   if (!m) return null;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 10, 0, 0, 0);
