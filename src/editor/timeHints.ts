@@ -27,6 +27,7 @@ export function parseTimeHint(text: string, now: Date = new Date()): TimeHint | 
     matchRelativeHours,
     matchRelativeDays,
     matchTomorrowWithTime,
+    matchTodayWithTime,
     matchTodayTonight,
     matchHouAfterDays,
     matchNextWeekday,
@@ -86,6 +87,27 @@ function matchTomorrowWithTime(text: string, now: Date): TimeHint | null {
     if (ap === "pm" && hour < 12) hour += 12;
     if (ap === "am" && hour === 12) hour = 0;
     d.setHours(hour, minute, 0, 0);
+  }
+  return { matchText: m[0].trim(), date: d };
+}
+
+function matchTodayWithTime(text: string, now: Date): TimeHint | null {
+  // 今天/今晚/今夜 + 可选 上午/下午/早上/晚上 + 小时(点) + 可选分钟
+  const m = text.match(
+    /(今\s*天|今\s*晚|今\s*夜)\s*(上午|下午|早上|晚上)?\s*(\d{1,2})\s*[点:]?\s*(\d{1,2})?\s*$/,
+  );
+  if (!m) return null;
+  const prefix = m[1].replace(/\s+/g, "");
+  const rawPeriod = m[2];
+  const period = rawPeriod || (prefix === "今晚" || prefix === "今夜" ? "晚上" : undefined);
+  let hour = Number(m[3]);
+  const minute = m[4] ? Number(m[4]) : 0;
+  if ((period === "下午" || period === "晚上") && hour < 12) hour += 12;
+  if (period === "上午" && hour === 12) hour = 0;
+  const d = new Date(now);
+  d.setHours(hour, minute, 0, 0);
+  if (d.getTime() <= now.getTime()) {
+    d.setDate(d.getDate() + 1);
   }
   return { matchText: m[0].trim(), date: d };
 }

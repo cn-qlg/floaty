@@ -115,6 +115,31 @@ describe("parseTimeHint — absolute", () => {
   });
 });
 
+describe("parseTimeHint — today with time", () => {
+  it("今天 23 点 → today 23:00", () => {
+    const h = parseTimeHint("交稿 今天 23 点", now);
+    expect(h?.date.getDate()).toBe(20);
+    expect(h?.date.getHours()).toBe(23);
+  });
+
+  it("今晚 10点 → today 22:00", () => {
+    const h = parseTimeHint("喝酒 今晚 10点", now);
+    expect(h?.date.getHours()).toBe(22);
+  });
+
+  it("今天 下午 3点 → today 15:00", () => {
+    const h = parseTimeHint("开会 今天 下午 3点", now);
+    expect(h?.date.getHours()).toBe(15);
+  });
+
+  it("今天 8 点 已过 → 明天 8:00", () => {
+    const nowAfternoon = new Date(2026, 3, 20, 14, 0);
+    const h = parseTimeHint("吃饭 今天 8 点", nowAfternoon);
+    expect(h?.date.getDate()).toBe(21);
+    expect(h?.date.getHours()).toBe(8);
+  });
+});
+
 describe("parseTimeHint — input-method spaces", () => {
   it("tolerates spaces around numbers (明天 18 点)", () => {
     const h = parseTimeHint("开会 明天 18 点", now);

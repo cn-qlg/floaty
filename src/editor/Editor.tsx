@@ -129,19 +129,17 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
         setGhost(null);
         return;
       }
-      // 取当前块起点到光标的纯文本
+      // 取当前 paragraph/taskItem 起点到光标的纯文本。
+      // 用 $from.parent 拿到最内层块节点（paragraph），再 textBetween 0 → offset；
+      // 比 $from.start() + doc.textBetween 更鲁棒（对 taskItem > paragraph 结构友好）。
       const $from = sel.$from;
-      const paraStart = $from.start();
-      const text = state.doc.textBetween(paraStart, sel.from, "\n", " ");
+      const text = $from.parent.textBetween(0, $from.parentOffset, "\n", " ");
       const hint = parseTimeHint(text);
       if (!hint) {
         setGhost(null);
         return;
       }
       const matchLen = hint.matchText.length;
-      // 匹配文本在 paraText 的尾部；换算成 doc 坐标需考虑中间 inline node 的占位
-      // 简化：假设中间没有 dueTime node（有也占 1 pos，近似偏移 ≤ matchLen）；
-      // 直接用 sel.from - matchLen 作为起点。
       const from = sel.from - matchLen;
       const coords = editor.view.coordsAtPos(sel.from);
       setGhost({ from, to: sel.from, hint, x: coords.left, y: coords.bottom });
