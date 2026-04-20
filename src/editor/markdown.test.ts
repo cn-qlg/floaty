@@ -51,4 +51,23 @@ describe("markdown round-trip", () => {
     const md = "# Title";
     expect(docToMarkdown(markdownToDoc(md))).toBe(md);
   });
+
+  it("round-trips a todo with @due token", () => {
+    const md = "- [ ] 写周报 @due:2026-04-20T22:00:00Z";
+    const doc = markdownToDoc(md);
+    const para = doc.content?.[0].content?.[0].content?.[0];
+    expect(para?.content).toHaveLength(2);
+    expect(para?.content?.[0].type).toBe("text");
+    expect(para?.content?.[1].type).toBe("dueTime");
+    expect(para?.content?.[1].attrs?.datetime).toBe("2026-04-20T22:00:00Z");
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it("parses multiple @due tokens in one line", () => {
+    const md = "mixed @due:2026-04-20T10:00:00Z and @due:2026-04-21T15:30:00Z";
+    const doc = markdownToDoc(md);
+    const para = doc.content?.[0];
+    const dueNodes = para?.content?.filter((n) => n.type === "dueTime") ?? [];
+    expect(dueNodes).toHaveLength(2);
+  });
 });

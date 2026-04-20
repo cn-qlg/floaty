@@ -36,6 +36,10 @@ function serializeTaskItem(node: ProseNode): string {
 
 function serializeInline(nodes: ProseNode[]): string {
   return nodes.map((n) => {
+    if (n.type === "dueTime") {
+      const iso = n.attrs?.datetime ?? "";
+      return iso ? `@due:${iso}` : "";
+    }
     if (n.type !== "text") return "";
     let text = n.text ?? "";
     const marks = n.marks ?? [];
@@ -88,6 +92,8 @@ export function markdownToDoc(md: string): ProseDoc {
   return { type: "doc", content: blocks };
 }
 
+const DUE_RE = /@due:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/;
+
 function parseInline(text: string): ProseNode[] {
   const tokens: ProseNode[] = [];
   let i = 0;
@@ -119,8 +125,17 @@ function parseInline(text: string): ProseNode[] {
         continue;
       }
     }
+    if (text[i] === "@") {
+      const rest = text.slice(i);
+      const match = rest.match(DUE_RE);
+      if (match && match.index === 0) {
+        tokens.push({ type: "dueTime", attrs: { datetime: match[1] } });
+        i += match[0].length;
+        continue;
+      }
+    }
     let j = i;
-    while (j < text.length && !"*[".includes(text[j])) j++;
+    while (j < text.length && !"*[@".includes(text[j])) j++;
     if (j === i) j = i + 1;
     tokens.push({ type: "text", text: text.slice(i, j) });
     i = j;
