@@ -29,7 +29,7 @@ impl Scheduler {
 
     /// 启动后台循环。setup 里 spawn 一次。
     pub fn spawn_loop(self, app: AppHandle) {
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             loop {
                 let db = match app.try_state::<Db>() {
                     Some(s) => s,
