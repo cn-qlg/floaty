@@ -47,6 +47,7 @@ pub fn run() {
             commands::windows::hide_sticky,
             commands::windows::show_sticky,
             commands::windows::toggle_pin,
+            commands::windows::show_all_stickies,
             commands::windows::new_sticky_window,
         ])
         .build(tauri::generate_context!())

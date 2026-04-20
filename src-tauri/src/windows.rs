@@ -101,6 +101,22 @@ pub async fn toggle_pin(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<
     Ok(next == 1)
 }
 
+/// 把所有 hidden=1 的便签恢复显示（批量）。已经 visible 的不变。
+pub async fn show_all(app: &AppHandle, db: &Db) -> AppResult<usize> {
+    let all = db::stickies::list_all(db).await?;
+    let mut shown = 0;
+    for s in all {
+        if s.hidden == 1 {
+            if let Err(e) = show(app, &s.id, db).await {
+                eprintln!("[floaty] show_all: {} failed: {}", s.id, e);
+            } else {
+                shown += 1;
+            }
+        }
+    }
+    Ok(shown)
+}
+
 /// 冷启动：打开所有 hidden=0 的便签。
 /// 仅当**全库为空**（首次安装）时才自动创建一张默认便签；
 /// 有便签但都 hidden=1 时，只启动 tray，让用户通过菜单栏恢复，避免每次重启都冒出空白新便签。

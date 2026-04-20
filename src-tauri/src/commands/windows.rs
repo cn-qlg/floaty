@@ -49,6 +49,13 @@ pub async fn toggle_pin(
 }
 
 #[tauri::command]
+pub async fn show_all_stickies(app: AppHandle, db: State<'_, Db>) -> AppResult<usize> {
+    let n = windows::show_all(&app, &db).await?;
+    crate::tray::refresh_menu(&app).await;
+    Ok(n)
+}
+
+#[tauri::command]
 pub async fn new_sticky_window(app: AppHandle, db: State<'_, Db>) -> AppResult<String> {
     let sticky = crate::db::stickies::create_default(&db).await?;
     windows::open(&app, &sticky).await?;

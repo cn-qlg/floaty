@@ -77,6 +77,19 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     }
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
+
+    let hidden_count = all.iter().filter(|s| s.hidden == 1).count();
+    if hidden_count > 0 {
+        let show_all_item = MenuItem::with_id(
+            app,
+            "show-all",
+            format!("👁  显示全部（{} 隐藏）", hidden_count),
+            true,
+            None::<&str>,
+        )?;
+        menu.append(&show_all_item)?;
+    }
+
     let new_item = MenuItem::with_id(
         app,
         "new-sticky",
@@ -117,6 +130,15 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
                 }
                 Err(e) => eprintln!("[floaty] tray new-sticky create failed: {}", e),
             }
+        });
+    } else if id == "show-all" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let db = handle.state::<Db>();
+            if let Err(e) = crate::windows::show_all(&handle, &db).await {
+                eprintln!("[floaty] tray show-all failed: {}", e);
+            }
+            refresh_menu(&handle).await;
         });
     } else if let Some(sticky_id) = id.strip_prefix("sticky:") {
         let handle = app.clone();
