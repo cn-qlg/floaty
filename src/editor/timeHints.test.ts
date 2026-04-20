@@ -164,6 +164,61 @@ describe("parseTimeHint — input-method spaces", () => {
   });
 });
 
+describe("parseTimeHint — user-reported gaps", () => {
+  it("1 个小时后", () => {
+    const h = parseTimeHint("ping 1 个小时后", now);
+    expect(h?.date.getTime()).toBe(now.getTime() + 3600_000);
+  });
+
+  it("今天晚上 → 20:00", () => {
+    const h = parseTimeHint("开会 今天晚上", now);
+    expect(h?.date.getHours()).toBe(20);
+    expect(h?.date.getDate()).toBe(20);
+  });
+
+  it("今天下午 → 15:00", () => {
+    const h = parseTimeHint("会议 今天下午", now);
+    expect(h?.date.getHours()).toBe(15);
+  });
+
+  it("今晚 19 点 → today 19:00", () => {
+    const h = parseTimeHint("吃饭 今晚 19 点", now);
+    expect(h?.date.getHours()).toBe(19);
+  });
+
+  it("明天（单独）→ tomorrow 10:00", () => {
+    const h = parseTimeHint("ping 明天", now);
+    expect(h?.date.getDate()).toBe(21);
+    expect(h?.date.getHours()).toBe(10);
+  });
+
+  it("明天 1 (用户打到一半) → 不触发", () => {
+    expect(parseTimeHint("开会 明天 1", now)).toBeNull();
+  });
+
+  it("明天 10点", () => {
+    const h = parseTimeHint("开会 明天 10点", now);
+    expect(h?.date.getDate()).toBe(21);
+    expect(h?.date.getHours()).toBe(10);
+  });
+
+  it("星期一 → next Monday", () => {
+    const h = parseTimeHint("plan 星期一", now);
+    expect(h?.date.getDate()).toBe(27);
+  });
+
+  it("星 期 三 (输入法空格)", () => {
+    const h = parseTimeHint("plan 星 期 三", now);
+    expect(h?.date.getDate()).toBe(22);
+  });
+
+  it("4 月 23 日", () => {
+    const h = parseTimeHint("生日 4 月 23 日", now);
+    expect(h?.date.getMonth()).toBe(3);
+    expect(h?.date.getDate()).toBe(23);
+  });
+});
+
 describe("parseTimeHint — middle-of-text matches", () => {
   it("matches '今天 24 点吃饭' (time mid-sentence)", () => {
     const h = parseTimeHint("今天 24 点吃饭", now);

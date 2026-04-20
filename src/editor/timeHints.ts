@@ -26,7 +26,10 @@ export function parseTimeHint(text: string, now: Date = new Date()): TimeHint | 
     matchRelativeHours,
     matchRelativeDays,
     matchTomorrowWithTime,
+    matchTomorrowPeriodOnly,
+    matchTomorrowAlone,
     matchTodayWithTime,
+    matchTodayPeriodOnly,
     matchTodayTonight,
     matchHouAfterDays,
     matchNextWeekday,
@@ -58,21 +61,21 @@ function toHint(m: RegExpMatchArray, date: Date): TimeHint {
 }
 
 function matchRelativeMinutes(text: string, now: Date): TimeHint | null {
-  const m = lastMatch(text, /(\d+)\s*(分钟|分|min|m)\s*后?/i);
+  const m = lastMatch(text, /(\d+)\s*个?\s*(分钟|分|min|m)\s*后?/i);
   if (!m) return null;
   const d = new Date(now.getTime() + Number(m[1]) * 60_000);
   return toHint(m, d);
 }
 
 function matchRelativeHours(text: string, now: Date): TimeHint | null {
-  const m = lastMatch(text, /(\d+)\s*(小时|时|hour|hr|h)\s*后?/i);
+  const m = lastMatch(text, /(\d+)\s*个?\s*(小时|时|hour|hr|h)\s*后?/i);
   if (!m) return null;
   const d = new Date(now.getTime() + Number(m[1]) * 3600_000);
   return toHint(m, d);
 }
 
 function matchRelativeDays(text: string, now: Date): TimeHint | null {
-  const m = lastMatch(text, /(\d+)\s*(天|day|d)\s*后?/i);
+  const m = lastMatch(text, /(\d+)\s*个?\s*(天|day|d)\s*后?/i);
   if (!m) return null;
   const d = new Date(now);
   d.setDate(d.getDate() + Number(m[1]));
@@ -80,20 +83,35 @@ function matchRelativeDays(text: string, now: Date): TimeHint | null {
   return toHint(m, d);
 }
 
+/** 明天 + (period + 数字) or (数字 + 点:)。要求必须有"点/:"或"period"，否则不触发 ghost，避免"明天 1"把用户打到一半的"10点"误识别 */
 function matchTomorrowWithTime(text: string, now: Date): TimeHint | null {
+  // 分支1：明天 + [早上|上午|下午|晚上] + 数字（[点]可选，有 period 锚定）
+  // 分支2：明天 + 数字 + [点|:]（必须有 [点:]）
   const m =
-    lastMatch(text, /明\s*天\s*(上午|下午|早上|晚上)?\s*(\d{1,2})\s*[点:]?\s*(\d{1,2})?/) ||
-    lastMatch(text, /tomorrow\s+(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)?/i);
+    lastMatch(
+      text,
+      /明\s*天\s*(早上|上午|下午|晚上)\s*(\d{1,2})\s*[点:]?\s*(\d{1,2})?/,
+    ) ||
+    lastMatch(text, /明\s*天\s*(\d{1,2})\s*[点:]\s*(\d{1,2})?/) ||
+    lastMatch(text, /tomorrow\s+(\d{1,2})\s*(?::(\d{2}))?\s*(am|pm)/i);
   if (!m) return null;
   const d = new Date(now);
   d.setDate(d.getDate() + 1);
   if (/明\s*天/.test(m[0])) {
-    const period = m[1];
-    let hour = Number(m[2]);
-    const minute = m[3] ? Number(m[3]) : 0;
-    if ((period === "下午" || period === "晚上") && hour < 12) hour += 12;
-    if (period === "上午" && hour === 12) hour = 0;
-    d.setHours(hour, minute, 0, 0);
+    // 分支1 有 period（3 组），分支2 无 period（仅 \d 点 \d? 共 2 组）
+    const hasPeriod = /(早上|上午|下午|晚上)/.test(m[0]);
+    if (hasPeriod) {
+      const period = m[1];
+      let hour = Number(m[2]);
+      const minute = m[3] ? Number(m[3]) : 0;
+      if ((period === "下午" || period === "晚上") && hour < 12) hour += 12;
+      if (period === "上午" && hour === 12) hour = 0;
+      d.setHours(hour, minute, 0, 0);
+    } else {
+      const hour = Number(m[1]);
+      const minute = m[2] ? Number(m[2]) : 0;
+      d.setHours(hour, minute, 0, 0);
+    }
   } else {
     let hour = Number(m[1]);
     const minute = m[2] ? Number(m[2]) : 0;
@@ -105,17 +123,53 @@ function matchTomorrowWithTime(text: string, now: Date): TimeHint | null {
   return toHint(m, d);
 }
 
+/** 明天 + period only (no digit) → 默认小时 */
+function matchTomorrowPeriodOnly(text: string, now: Date): TimeHint | null {
+  const m = lastMatch(text, /明\s*天\s*(早上|上午|中午|下午|晚上)(?!\s*\d)/);
+  if (!m) return null;
+  const hourMap: Record<string, number> = { 早上: 8, 上午: 10, 中午: 12, 下午: 15, 晚上: 20 };
+  const hour = hourMap[m[1]] ?? 10;
+  const d = new Date(now);
+  d.setDate(d.getDate() + 1);
+  d.setHours(hour, 0, 0, 0);
+  return toHint(m, d);
+}
+
+/** 裸 "明天"（后面没 period、没数字） → 明天 10:00 */
+function matchTomorrowAlone(text: string, now: Date): TimeHint | null {
+  const m = lastMatch(text, /明\s*天(?!\s*(?:\d|早上|上午|中午|下午|晚上))/);
+  if (!m) return null;
+  const d = new Date(now);
+  d.setDate(d.getDate() + 1);
+  d.setHours(10, 0, 0, 0);
+  return toHint(m, d);
+}
+
+/** 今天/今晚/今夜 + period (optional) + 数字 + [点:] */
 function matchTodayWithTime(text: string, now: Date): TimeHint | null {
-  const m = lastMatch(
-    text,
-    /(今\s*天|今\s*晚|今\s*夜)\s*(上午|下午|早上|晚上)?\s*(\d{1,2})\s*[点:]?\s*(\d{1,2})?/,
-  );
+  // 分支1：今天/今晚 + period + 数字（[点] 可选）
+  // 分支2：今天/今晚 + 数字 + [点|:]
+  const m =
+    lastMatch(
+      text,
+      /(今\s*天|今\s*晚|今\s*夜)\s*(早上|上午|下午|晚上)\s*(\d{1,2})\s*[点:]?\s*(\d{1,2})?/,
+    ) ||
+    lastMatch(text, /(今\s*天|今\s*晚|今\s*夜)\s*(\d{1,2})\s*[点:]\s*(\d{1,2})?/);
   if (!m) return null;
   const prefix = m[1].replace(/\s+/g, "");
-  const rawPeriod = m[2];
-  const period = rawPeriod || (prefix === "今晚" || prefix === "今夜" ? "晚上" : undefined);
-  let hour = Number(m[3]);
-  const minute = m[4] ? Number(m[4]) : 0;
+  const hasPeriod = /(早上|上午|下午|晚上)/.test(m[0]);
+  let period: string | undefined;
+  let hour: number;
+  let minute = 0;
+  if (hasPeriod) {
+    period = m[2];
+    hour = Number(m[3]);
+    if (m[4]) minute = Number(m[4]);
+  } else {
+    period = prefix === "今晚" || prefix === "今夜" ? "晚上" : undefined;
+    hour = Number(m[2]);
+    if (m[3]) minute = Number(m[3]);
+  }
   if ((period === "下午" || period === "晚上") && hour < 12) hour += 12;
   if (period === "上午" && hour === 12) hour = 0;
   const d = new Date(now);
@@ -124,8 +178,21 @@ function matchTodayWithTime(text: string, now: Date): TimeHint | null {
   return toHint(m, d);
 }
 
+/** 今天 + period only (no digit) → 默认小时 */
+function matchTodayPeriodOnly(text: string, now: Date): TimeHint | null {
+  const m = lastMatch(text, /(今\s*天|今\s*晚|今\s*夜)\s*(早上|上午|中午|下午|晚上)(?!\s*\d)/);
+  if (!m) return null;
+  const hourMap: Record<string, number> = { 早上: 8, 上午: 10, 中午: 12, 下午: 15, 晚上: 20 };
+  const hour = hourMap[m[2]] ?? 18;
+  const d = new Date(now);
+  d.setHours(hour, 0, 0, 0);
+  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+  return toHint(m, d);
+}
+
 function matchTodayTonight(text: string, now: Date): TimeHint | null {
-  const m = lastMatch(text, /(今天|今晚|tonight)/i);
+  // 裸 "今天" / "今晚"（后面没 period、没数字） → 今天 18:00 / 22:00
+  const m = lastMatch(text, /(今天|今晚|tonight)(?!\s*(?:\d|早上|上午|中午|下午|晚上))/i);
   if (!m) return null;
   const d = new Date(now);
   const kind = m[1].toLowerCase();
@@ -144,7 +211,7 @@ function matchHouAfterDays(text: string, now: Date): TimeHint | null {
 }
 
 function matchNextWeekday(text: string, now: Date): TimeHint | null {
-  const m = lastMatch(text, /(下)?\s*周\s*([一二三四五六日天])/);
+  const m = lastMatch(text, /(下)?\s*(?:周|星\s*期|礼\s*拜)\s*([一二三四五六日天])/);
   if (!m) return null;
   const ch = m[2] === "天" ? "日" : m[2];
   const target = CN_WEEKDAYS.indexOf(ch);
