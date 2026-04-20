@@ -62,3 +62,59 @@ pub async fn new_sticky_window(app: AppHandle, db: State<'_, Db>) -> AppResult<S
     crate::tray::refresh_menu(&app).await;
     Ok(sticky.id)
 }
+
+#[tauri::command]
+pub async fn open_preferences(app: AppHandle) -> AppResult<()> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+    if let Some(w) = app.get_webview_window("preferences") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, "preferences", WebviewUrl::App("index.html#/preferences".into()))
+        .title("Floaty 偏好设置")
+        .inner_size(420.0, 300.0)
+        .resizable(false)
+        .decorations(true)
+        .transparent(false)
+        .visible(true)
+        .build()
+        .map_err(|e| crate::error::AppError::Other(format!("preferences build: {}", e)))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_stats(db: State<'_, Db>) -> AppResult<StatsPayload> {
+    let sticky_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM stickies")
+        .fetch_one(db.inner())
+        .await?;
+    let item_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM items")
+        .fetch_one(db.inner())
+        .await?;
+    let reminder_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM reminders WHERE fired_at IS NULL")
+            .fetch_one(db.inner())
+            .await?;
+    Ok(StatsPayload {
+        stickies: sticky_count.0,
+        items: item_count.0,
+        pending_reminders: reminder_count.0,
+    })
+}
+
+#[tauri::command]
+pub async fn get_data_dir(app: AppHandle) -> AppResult<String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| crate::error::AppError::Other(format!("app_data_dir: {}", e)))?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct StatsPayload {
+    pub stickies: i64,
+    pub items: i64,
+    pub pending_reminders: i64,
+}

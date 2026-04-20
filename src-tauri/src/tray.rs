@@ -102,7 +102,7 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     )?;
     menu.append(&new_item)?;
 
-    let prefs = MenuItem::with_id(app, "preferences", "⚙️ 偏好设置", false, None::<&str>)?;
+    let prefs = MenuItem::with_id(app, "preferences", "⚙️ 偏好设置", true, None::<&str>)?;
     menu.append(&prefs)?;
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
@@ -120,6 +120,15 @@ fn sticky_display_name(s: &Sticky, index: usize) -> String {
 
 fn on_menu_event(app: &AppHandle, event: MenuEvent) {
     let id = event.id().as_ref().to_string();
+    if id == "preferences" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = crate::commands::windows::open_preferences(handle).await {
+                eprintln!("[floaty] open_preferences failed: {}", e);
+            }
+        });
+        return;
+    }
     if id == "new-sticky" {
         let handle = app.clone();
         tauri::async_runtime::spawn(async move {

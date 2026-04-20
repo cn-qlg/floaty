@@ -1,28 +1,39 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { StickyPage } from "./sticky/StickyPage";
+import { PreferencesPage } from "./preferences/PreferencesPage";
+
+type Route =
+  | { kind: "sticky"; stickyId: string }
+  | { kind: "preferences" }
+  | { kind: "unknown" };
 
 export default function App() {
-  const [stickyId, setStickyId] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [route, setRoute] = useState<Route | null>(null);
 
   useEffect(() => {
     const label = getCurrentWindow().label;
     if (label.startsWith("sticky-")) {
-      setStickyId(label.slice("sticky-".length));
+      setRoute({ kind: "sticky", stickyId: label.slice("sticky-".length) });
+    } else if (label === "preferences") {
+      setRoute({ kind: "preferences" });
+    } else {
+      setRoute({ kind: "unknown" });
     }
-    setReady(true);
   }, []);
 
-  if (!ready) {
+  if (!route) {
     return <div className="h-screen bg-yellow-100 p-3 text-xs opacity-60">Loading...</div>;
   }
-  if (!stickyId) {
-    return (
-      <div className="h-screen bg-red-100 p-3 text-xs">
-        Unknown window label. Expected "sticky-&lt;id&gt;".
-      </div>
-    );
+  if (route.kind === "preferences") {
+    return <PreferencesPage />;
   }
-  return <StickyPage stickyId={stickyId} />;
+  if (route.kind === "sticky") {
+    return <StickyPage stickyId={route.stickyId} />;
+  }
+  return (
+    <div className="h-screen bg-red-100 p-3 text-xs">
+      Unknown window label. Expected "sticky-&lt;id&gt;" or "preferences".
+    </div>
+  );
 }

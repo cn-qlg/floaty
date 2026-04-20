@@ -55,6 +55,9 @@ pub fn run() {
             commands::windows::toggle_pin,
             commands::windows::show_all_stickies,
             commands::windows::new_sticky_window,
+            commands::windows::open_preferences,
+            commands::windows::get_stats,
+            commands::windows::get_data_dir,
             commands::reminders::sync_reminders,
             commands::reminders::snooze_reminder,
         ])
