@@ -115,6 +115,30 @@ describe("parseTimeHint — absolute", () => {
   });
 });
 
+describe("parseTimeHint — input-method spaces", () => {
+  it("tolerates spaces around numbers (明天 18 点)", () => {
+    const h = parseTimeHint("开会 明天 18 点", now);
+    expect(h?.date.getDate()).toBe(21);
+    expect(h?.date.getHours()).toBe(18);
+  });
+
+  it("tolerates spaces in '30 分钟 后'", () => {
+    const h = parseTimeHint("ping 30 分钟 后", now);
+    expect(h?.date.getTime()).toBe(now.getTime() + 30 * 60_000);
+  });
+
+  it("tolerates '下 周 三'", () => {
+    const h = parseTimeHint("plan 下 周 三", now);
+    expect(h?.date.getDate()).toBe(29);
+  });
+
+  it("tolerates '4 月 25 日'", () => {
+    const h = parseTimeHint("event 4 月 25 日", now);
+    expect(h?.date.getMonth()).toBe(3);
+    expect(h?.date.getDate()).toBe(25);
+  });
+});
+
 describe("parseTimeHint — negatives", () => {
   it("returns null for unrelated text", () => {
     expect(parseTimeHint("随便写点什么", now)).toBeNull();
