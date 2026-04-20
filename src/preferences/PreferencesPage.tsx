@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { ipc } from "../ipc/client";
 
 interface Stats {
@@ -11,21 +12,34 @@ interface Stats {
 export function PreferencesPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [dataDir, setDataDir] = useState<string>("");
+  const [autostart, setAutostart] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, d] = await Promise.all([
+        const [s, d, a] = await Promise.all([
           invoke<Stats>("get_stats"),
           invoke<string>("get_data_dir"),
+          isEnabled(),
         ]);
         setStats(s);
         setDataDir(d);
+        setAutostart(a);
       } catch (err) {
         console.error("[floaty] preferences load failed:", err);
       }
     })();
   }, []);
+
+  const toggleAutostart = async (next: boolean) => {
+    try {
+      if (next) await enable();
+      else await disable();
+      setAutostart(next);
+    } catch (err) {
+      console.error("[floaty] toggle autostart failed:", err);
+    }
+  };
 
   const openDataDir = async () => {
     try {
@@ -74,6 +88,18 @@ export function PreferencesPage() {
           >
             在 Finder 中显示
           </button>
+        </section>
+
+        <section>
+          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">启动</div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autostart}
+              onChange={(e) => toggleAutostart(e.target.checked)}
+            />
+            <span>开机自动启动 Floaty（macOS LaunchAgent）</span>
+          </label>
         </section>
 
         <section>

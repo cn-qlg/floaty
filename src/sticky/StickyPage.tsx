@@ -89,7 +89,7 @@ export function StickyPage({ stickyId }: StickyPageProps) {
         <strong data-tauri-drag-region className="pointer-events-none opacity-70 flex items-center gap-1.5">
           <span>📋 Floaty</span>
           {pinned && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-[1px] rounded bg-red-500 text-white">
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-[1px] rounded bg-red-500 text-white max-[240px]:hidden">
               已置顶
             </span>
           )}
