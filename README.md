@@ -23,7 +23,7 @@ npm test               # 跑前端测试
 cd src-tauri && cargo test --lib && cd ..  # 跑后端测试
 ```
 
-数据存储位置（macOS）：`~/Library/Application Support/ai.kaito.floaty/floaty.db`
+数据存储位置（macOS）：`~/Library/Application Support/app.floaty.desktop/floaty.db`
 
 ## 设计文档
 

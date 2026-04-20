@@ -79,7 +79,7 @@ floaty/
 
 ```bash
 cd /Users/liuguoqing/Codes/OpenSource/floaty
-npm create tauri-app@latest -- floaty --template react-ts --manager npm --identifier ai.kaito.floaty
+npm create tauri-app@latest -- floaty --template react-ts --manager npm --identifier app.floaty.desktop
 ```
 
 它会问几个问题，照下回答：
@@ -117,7 +117,7 @@ Expected: 一个 Tauri 窗口弹出，显示模板的 "Welcome to Tauri + React"
 }
 ```
 
-也设 `productName` 为 `"Floaty"`，`identifier` 为 `"ai.kaito.floaty"`。
+也设 `productName` 为 `"Floaty"`，`identifier` 为 `"app.floaty.desktop"`。
 
 - [ ] **Step 4: 重新跑 `npm run tauri dev`**
 
@@ -494,10 +494,10 @@ cd src-tauri && cargo build && cd ..
 npm run tauri dev
 ```
 
-Expected: 无报错，启动后 `~/Library/Application Support/ai.kaito.floaty/floaty.db` 文件被创建（macOS）。
+Expected: 无报错，启动后 `~/Library/Application Support/app.floaty.desktop/floaty.db` 文件被创建（macOS）。
 
 ```bash
-sqlite3 "$HOME/Library/Application Support/ai.kaito.floaty/floaty.db" ".tables"
+sqlite3 "$HOME/Library/Application Support/app.floaty.desktop/floaty.db" ".tables"
 ```
 
 Expected: 列出 `_migrations  items  stickies`。
@@ -1612,7 +1612,7 @@ npm test               # 跑前端测试
 cd src-tauri && cargo test --lib && cd ..  # 跑后端测试
 ```
 
-数据存储位置（macOS）：`~/Library/Application Support/ai.kaito.floaty/floaty.db`
+数据存储位置（macOS）：`~/Library/Application Support/app.floaty.desktop/floaty.db`
 
 ## 设计文档
 
