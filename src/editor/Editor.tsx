@@ -217,10 +217,19 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   );
 }
 
+function formatDebugTime(d: Date): string {
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
 function GhostPreview({ ghost, onAccept }: { ghost: GhostState; onAccept: () => void }) {
   const iso = ghost.hint.date.toISOString();
   const tier = tierOf(iso);
   const label = tierLabel(tier, iso);
+  const debugTime = formatDebugTime(ghost.hint.date);
   return (
     <div
       className="fixed z-40 pointer-events-auto select-none text-[10px]"
@@ -231,8 +240,9 @@ function GhostPreview({ ghost, onAccept }: { ghost: GhostState; onAccept: () => 
       }}
       title="按 Tab 接受"
     >
-      <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border border-dashed border-black/30 bg-white/80 text-black/60">
-        {label}
+      <span className="inline-flex items-center gap-1.5 px-1.5 py-[1px] rounded border border-dashed border-black/30 bg-white/80 text-black/60">
+        <span>{label}</span>
+        <span className="font-mono text-[9px] opacity-60">{debugTime}</span>
         <kbd className="px-1 rounded bg-black/10 text-[9px]">Tab</kbd>
       </span>
     </div>
