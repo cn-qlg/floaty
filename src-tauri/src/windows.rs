@@ -101,18 +101,28 @@ pub async fn toggle_pin(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<
     Ok(next == 1)
 }
 
-/// 把所有 hidden=1 的便签恢复显示（批量）。已经 visible 的不变。
+/// "Bring all to front"：把所有便签都推到桌面最前。
+/// - hidden=1：先 un-hide（DB + webview）+ open 窗口
+/// - hidden=0 有 window：show + set_focus 提到前面
+/// - hidden=0 无 window（异常）：open 重建
+/// 返回被操作的便签数。
 pub async fn show_all(app: &AppHandle, db: &Db) -> AppResult<usize> {
     let all = db::stickies::list_all(db).await?;
     let mut shown = 0;
-    for s in all {
+    for s in &all {
         if s.hidden == 1 {
             if let Err(e) = show(app, &s.id, db).await {
-                eprintln!("[floaty] show_all: {} failed: {}", s.id, e);
-            } else {
-                shown += 1;
+                eprintln!("[floaty] show_all (hidden): {} failed: {}", s.id, e);
+                continue;
             }
+        } else if let Some(w) = app.get_webview_window(&label(&s.id)) {
+            let _ = w.show();
+            let _ = w.set_focus();
+        } else if let Err(e) = open(app, s).await {
+            eprintln!("[floaty] show_all (reopen): {} failed: {}", s.id, e);
+            continue;
         }
+        shown += 1;
     }
     Ok(shown)
 }
