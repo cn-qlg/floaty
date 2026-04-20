@@ -6,6 +6,7 @@ interface SettingsPopoverProps {
   sticky: Sticky;
   onPatch: (patch: StickyPatch) => void;
   onClose: () => void;
+  onDelete: () => void;
 }
 
 const PRESET_COLORS = [
@@ -19,7 +20,7 @@ const PRESET_COLORS = [
   { name: "灰", value: "#D0D0D0" },
 ];
 
-export function SettingsPopover({ sticky, onPatch, onClose }: SettingsPopoverProps) {
+export function SettingsPopover({ sticky, onPatch, onClose, onDelete }: SettingsPopoverProps) {
   // "auto" = 字体颜色是不是等于 autoFg(bg)；此状态是 UI 级（不入 DB）
   const [fontColorAuto, setFontColorAuto] = useState(
     sticky.font_color == null ||
@@ -183,13 +184,19 @@ export function SettingsPopover({ sticky, onPatch, onClose }: SettingsPopoverPro
           </div>
         </div>
 
-        {/* 重置 */}
-        <div className="pt-2 border-t border-black/5">
+        {/* 重置 + 删除 */}
+        <div className="pt-2 border-t border-black/5 space-y-1.5">
           <button
             className="w-full h-7 rounded border border-black/10 hover:bg-black/5 text-xs"
             onClick={reset}
           >
             重置默认
+          </button>
+          <button
+            className="w-full h-7 rounded border border-red-300 text-red-600 hover:bg-red-50 text-xs"
+            onClick={onDelete}
+          >
+            删除便签...
           </button>
         </div>
       </div>

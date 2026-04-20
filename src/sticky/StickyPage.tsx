@@ -58,6 +58,17 @@ export function StickyPage({ stickyId }: StickyPageProps) {
     }
   };
 
+  const onDelete = async () => {
+    if (!window.confirm("确定要删除这张便签吗？\n所有内容和提醒都会被永久删除，无法恢复。")) {
+      return;
+    }
+    try {
+      await ipc.deleteSticky(stickyId);
+    } catch (err) {
+      console.error("[floaty] deleteSticky failed:", err);
+    }
+  };
+
   return (
     <div
       className="h-screen flex flex-col backdrop-blur-md relative"
@@ -132,6 +143,7 @@ export function StickyPage({ stickyId }: StickyPageProps) {
           sticky={sticky}
           onPatch={onPatch}
           onClose={() => setSettingsOpen(false)}
+          onDelete={onDelete}
         />
       )}
     </div>

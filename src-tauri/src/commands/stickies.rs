@@ -1,6 +1,6 @@
 use crate::db::{self, stickies::{Sticky, StickyPatch}, Db};
-use crate::error::AppResult;
-use tauri::{AppHandle, State};
+use crate::error::{AppError, AppResult};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub async fn get_or_create_default_sticky(app: AppHandle, db: State<'_, Db>) -> AppResult<Sticky> {
@@ -49,6 +49,11 @@ pub async fn update_sticky(
 
 #[tauri::command]
 pub async fn delete_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> AppResult<()> {
+    // 先关掉窗口（destroy webview），再删 DB（级联删 items + reminders）
+    if let Some(w) = app.get_webview_window(&crate::windows::label(&id)) {
+        w.close()
+            .map_err(|e| AppError::Other(format!("delete_sticky close: {}", e)))?;
+    }
     db::stickies::delete(&db, &id).await?;
     crate::tray::refresh_menu(&app).await;
     Ok(())
