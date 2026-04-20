@@ -226,6 +226,66 @@ describe("parseTimeHint — user-reported gaps", () => {
   });
 });
 
+describe("parseTimeHint — 日期+时间 组合", () => {
+  it("后天 3 点 → +2 days 03:00", () => {
+    const h = parseTimeHint("会议 后天 3 点", now);
+    expect(h?.date.getDate()).toBe(22);
+    expect(h?.date.getHours()).toBe(3);
+  });
+
+  it("后天 下午 → +2 days 15:00", () => {
+    const h = parseTimeHint("活动 后天 下午", now);
+    expect(h?.date.getDate()).toBe(22);
+    expect(h?.date.getHours()).toBe(15);
+  });
+
+  it("后天 下午 3 点 → +2 days 15:00", () => {
+    const h = parseTimeHint("活动 后天 下午 3 点", now);
+    expect(h?.date.getDate()).toBe(22);
+    expect(h?.date.getHours()).toBe(15);
+  });
+
+  it("大后天 10:30 → +3 days 10:30", () => {
+    const h = parseTimeHint("ping 大后天 10:30", now);
+    expect(h?.date.getDate()).toBe(23);
+    expect(h?.date.getHours()).toBe(10);
+    expect(h?.date.getMinutes()).toBe(30);
+  });
+
+  it("周三 14:00 → Wed 14:00", () => {
+    const h = parseTimeHint("plan 周三 14:00", now);
+    expect(h?.date.getDate()).toBe(22);
+    expect(h?.date.getHours()).toBe(14);
+  });
+
+  it("下周一 早上 8 点 → +7 days 08:00", () => {
+    const h = parseTimeHint("会议 下周一 早上 8 点", now);
+    expect(h?.date.getDate()).toBe(27);
+    expect(h?.date.getHours()).toBe(8);
+  });
+
+  it("4 月 25 日 下午 3 点 → 4/25 15:00", () => {
+    const h = parseTimeHint("event 4 月 25 日 下午 3 点", now);
+    expect(h?.date.getMonth()).toBe(3);
+    expect(h?.date.getDate()).toBe(25);
+    expect(h?.date.getHours()).toBe(15);
+  });
+
+  it("2026-05-15 14:30 → specific ISO + time", () => {
+    const h = parseTimeHint("deadline 2026-05-15 14:30", now);
+    expect(h?.date.getMonth()).toBe(4);
+    expect(h?.date.getDate()).toBe(15);
+    expect(h?.date.getHours()).toBe(14);
+    expect(h?.date.getMinutes()).toBe(30);
+  });
+
+  it("明天 晚上 10点 (晚上 + 10 → 22:00)", () => {
+    const h = parseTimeHint("吃饭 明天 晚上 10点", now);
+    expect(h?.date.getDate()).toBe(21);
+    expect(h?.date.getHours()).toBe(22);
+  });
+});
+
 describe("parseTimeHint — middle-of-text matches", () => {
   it("matches '今天 24 点吃饭' (time mid-sentence)", () => {
     const h = parseTimeHint("今天 24 点吃饭", now);
