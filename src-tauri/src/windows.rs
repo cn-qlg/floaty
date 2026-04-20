@@ -50,6 +50,9 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
 /// 关闭（隐藏）便签窗口：DB 标记 hidden，**hide 而非 destroy**。
 /// 用 w.hide() 而不是 w.close()，避免 macOS 把同 app 的其它窗口往前送
 /// 导致"关一个，另一个弹出来"。重新显示时 w.show() 比 rebuild 快得多。
+/// 额外：hide 之后 deactivate 整个 floaty app，让 macOS 把前台让给别的 app
+/// （比如用户刚才在用的 Terminal），否则 macOS 会自动 focus 另一张 floaty
+/// 窗口，看起来像"弹出"。
 pub async fn hide(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<()> {
     db::stickies::update(
         db,
@@ -64,7 +67,21 @@ pub async fn hide(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<()> {
         w.hide()
             .map_err(|e| AppError::Other(format!("window hide: {}", e)))?;
     }
+    #[cfg(target_os = "macos")]
+    deactivate_app();
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn deactivate_app() {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    unsafe {
+        let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+        if !app.is_null() {
+            let _: () = msg_send![app, deactivate];
+        }
+    }
 }
 
 /// 从菜单栏恢复一个已隐藏的便签
