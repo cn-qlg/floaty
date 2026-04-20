@@ -47,9 +47,14 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
     Ok(window)
 }
 
-/// 关闭（隐藏）便签窗口：DB 标记 hidden，**hide 而非 destroy**。
-/// 用 w.hide() 而不是 w.close()，避免 macOS 把同 app 的其它窗口往前送
-/// 导致"关一个，另一个弹出来"。重新显示时 w.show() 比 rebuild 快得多。
+/// 关闭（隐藏）便签窗口。策略：
+/// 1) DB 标记 hidden=1
+/// 2) 不调 w.hide()（会触发 macOS key-window cascade → 另一张 sticky 被拉前）
+///    也不调 w.close()（会 destroy + 触发全 app 窗口重排）
+///    而是把窗口移到屏幕外（-32000, -32000）+ 设为非 always_on_top，
+///    macOS 认为窗口还"可见"于某处，不做 key-window 重新挑选，
+///    其它 sticky 的 z-order 完全不变。
+///    重新显示时把位置恢复并（如 pinned）重新置顶。
 pub async fn hide(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<()> {
     db::stickies::update(
         db,
@@ -61,13 +66,17 @@ pub async fn hide(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<()> {
     )
     .await?;
     if let Some(w) = app.get_webview_window(&label(sticky_id)) {
-        w.hide()
-            .map_err(|e| AppError::Other(format!("window hide: {}", e)))?;
+        // 先取消 always_on_top，否则即使在屏幕外也会在桌面切换时闪现
+        let _ = w.set_always_on_top(false);
+        w.set_position(tauri::LogicalPosition::new(-32000.0, -32000.0))
+            .map_err(|e| AppError::Other(format!("window set_position offscreen: {}", e)))?;
     }
     Ok(())
 }
 
-/// 从菜单栏恢复一个已隐藏的便签
+/// 从菜单栏恢复一个已隐藏的便签：
+/// 若窗口已存在（被 hide 挪到屏幕外）→ 恢复位置 + 重新 pinned 状态
+/// 不存在 → 当作冷启动打开
 pub async fn show(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<WebviewWindow> {
     let sticky = db::stickies::update(
         db,
@@ -78,6 +87,18 @@ pub async fn show(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<Webvie
         },
     )
     .await?;
+    if let Some(w) = app.get_webview_window(&label(sticky_id)) {
+        // 从 offscreen 恢复位置
+        let (x, y) = match (sticky.x, sticky.y) {
+            (Some(x), Some(y)) => sanitize_position(x, y).unwrap_or((200, 200)),
+            _ => (200, 200),
+        };
+        w.set_position(tauri::LogicalPosition::new(x as f64, y as f64))
+            .map_err(|e| AppError::Other(format!("window set_position restore: {}", e)))?;
+        let _ = w.set_always_on_top(sticky.pinned == 1);
+        w.set_focus().ok();
+        return Ok(w);
+    }
     open(app, &sticky).await
 }
 
@@ -194,6 +215,11 @@ fn attach_geometry_listener(window: &WebviewWindow, sticky_id: String) -> AppRes
             }
             _ => return,
         };
+        // Guard: hide() 会把窗口挪到 (-32000,-32000) 屏幕外；这种"伪隐藏"的
+        // 移动事件不能覆盖真实位置。用 sanitize_position 统一判定。
+        if sanitize_position(x, y).is_none() {
+            return;
+        }
         let sticky_id = sticky_id.clone();
         let app = app.clone();
         tauri::async_runtime::spawn(async move {

@@ -29,3 +29,6 @@ anyhow = "1"
 thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5"
+

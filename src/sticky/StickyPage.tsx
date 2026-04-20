@@ -1,6 +1,10 @@
+import { useState } from "react";
 import { Editor } from "../editor/Editor";
 import { useStickyData } from "./useStickyData";
+import { SettingsPopover } from "./SettingsPopover";
 import { ipc } from "../ipc/client";
+import { autoFg } from "../theme/contrast";
+import type { StickyPatch } from "../ipc/types";
 
 interface StickyPageProps {
   stickyId: string;
@@ -8,12 +12,14 @@ interface StickyPageProps {
 
 export function StickyPage({ stickyId }: StickyPageProps) {
   const { sticky, setSticky, markdown, loaded, save } = useStickyData(stickyId);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!loaded || !sticky) {
     return <div className="h-screen bg-yellow-100 p-3 text-xs opacity-60">Loading...</div>;
   }
 
   const pinned = sticky.pinned === 1;
+  const fg = sticky.font_color ?? autoFg(sticky.bg_color);
 
   const onTogglePin = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -22,7 +28,6 @@ export function StickyPage({ stickyId }: StickyPageProps) {
       await ipc.togglePin(stickyId);
       const fresh = await ipc.getSticky(stickyId);
       setSticky(fresh);
-      console.log("[floaty] pin toggled →", fresh.pinned === 1);
     } catch (err) {
       console.error("[floaty] togglePin failed:", err);
     }
@@ -38,17 +43,33 @@ export function StickyPage({ stickyId }: StickyPageProps) {
     }
   };
 
+  const toggleSettings = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSettingsOpen((v) => !v);
+  };
+
+  const onPatch = async (patch: StickyPatch) => {
+    try {
+      const fresh = await ipc.updateSticky(stickyId, patch);
+      setSticky(fresh);
+    } catch (err) {
+      console.error("[floaty] updateSticky failed:", err);
+    }
+  };
+
   return (
     <div
-      className="h-screen flex flex-col backdrop-blur-md"
+      className="h-screen flex flex-col backdrop-blur-md relative"
       style={{
         backgroundColor: hexWithAlpha(sticky.bg_color, sticky.opacity),
-        color: "var(--sticky-fg)",
       }}
+      onClick={() => settingsOpen && setSettingsOpen(false)}
     >
       <div
         data-tauri-drag-region
         className="flex items-center justify-between px-3 py-1.5 text-xs border-b border-black/5 select-none cursor-grab active:cursor-grabbing"
+        style={{ color: autoFg(sticky.bg_color) }}
       >
         <strong data-tauri-drag-region className="pointer-events-none opacity-70 flex items-center gap-1.5">
           <span>📋 Floaty</span>
@@ -78,6 +99,19 @@ export function StickyPage({ stickyId }: StickyPageProps) {
           </button>
           <button
             type="button"
+            className={
+              settingsOpen
+                ? "text-[11px] w-6 h-5 rounded bg-black/10"
+                : "text-[11px] w-6 h-5 rounded opacity-40 hover:opacity-80 hover:bg-black/5"
+            }
+            onClick={toggleSettings}
+            title="外观设置"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          >
+            ⚙
+          </button>
+          <button
+            type="button"
             className="text-[11px] w-6 h-5 rounded opacity-40 hover:opacity-80 hover:bg-black/5"
             onClick={onClose}
             title="关闭（不删除，可从菜单栏恢复）"
@@ -87,9 +121,19 @@ export function StickyPage({ stickyId }: StickyPageProps) {
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-3">
+      <div
+        className="flex-1 overflow-auto p-3"
+        style={{ color: fg, fontSize: `${sticky.font_size}px` }}
+      >
         <Editor initialMarkdown={markdown} onChange={save} />
       </div>
+      {settingsOpen && (
+        <SettingsPopover
+          sticky={sticky}
+          onPatch={onPatch}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }
