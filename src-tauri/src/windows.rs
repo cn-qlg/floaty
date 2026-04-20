@@ -12,10 +12,11 @@ pub fn id_from_label(label: &str) -> Option<&str> {
     label.strip_prefix("sticky-")
 }
 
-/// 打开一个便签窗口（已存在则 focus）。成功返回 WebviewWindow。
+/// 打开一个便签窗口（已存在则 show + focus）。成功返回 WebviewWindow。
 pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> {
     let lbl = label(&sticky.id);
     if let Some(w) = app.get_webview_window(&lbl) {
+        w.show().ok();
         w.set_focus().ok();
         return Ok(w);
     }
@@ -46,7 +47,9 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
     Ok(window)
 }
 
-/// 关闭（隐藏）便签窗口：DB 标记 hidden，销毁 webview。
+/// 关闭（隐藏）便签窗口：DB 标记 hidden，**hide 而非 destroy**。
+/// 用 w.hide() 而不是 w.close()，避免 macOS 把同 app 的其它窗口往前送
+/// 导致"关一个，另一个弹出来"。重新显示时 w.show() 比 rebuild 快得多。
 pub async fn hide(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<()> {
     db::stickies::update(
         db,
@@ -58,8 +61,8 @@ pub async fn hide(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<()> {
     )
     .await?;
     if let Some(w) = app.get_webview_window(&label(sticky_id)) {
-        w.close()
-            .map_err(|e| AppError::Other(format!("window close: {}", e)))?;
+        w.hide()
+            .map_err(|e| AppError::Other(format!("window hide: {}", e)))?;
     }
     Ok(())
 }
