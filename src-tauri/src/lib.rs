@@ -16,32 +16,14 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts(["CmdOrCtrl+Shift+N"])
-                .expect("register shortcut")
-                .with_handler(|app, shortcut, event| {
-                    use tauri_plugin_global_shortcut::ShortcutState;
-                    if event.state() != ShortcutState::Pressed {
-                        return;
-                    }
-                    let key = shortcut.into_string();
-                    if key.to_lowercase().contains("shift+n") {
-                        let handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let db = handle.state::<crate::db::Db>();
-                            match crate::db::stickies::create_default(&db).await {
-                                Ok(sticky) => {
-                                    let _ = crate::windows::open(&handle, &sticky).await;
-                                    crate::tray::refresh_menu(&handle).await;
-                                }
-                                Err(e) => eprintln!("[floaty] global ⌘⇧N create failed: {}", e),
-                            }
-                        });
-                    }
-                })
-                .build(),
-        )
+        // 全局快捷键暂时禁用，疑似影响窗口可见性。后续用 app.global_shortcut().register() 在 setup 里注册
+        // .plugin(
+        //     tauri_plugin_global_shortcut::Builder::new()
+        //         .with_shortcuts(["CmdOrCtrl+Shift+N"])
+        //         .expect("register shortcut")
+        //         .with_handler(...)
+        //         .build(),
+        // )
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);

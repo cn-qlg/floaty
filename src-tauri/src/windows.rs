@@ -35,20 +35,13 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
 
     if let (Some(x), Some(y)) = (sticky.x, sticky.y) {
         if let Some((sx, sy)) = sanitize_position(x, y) {
-            // 进一步确认位置至少在某个显示器可见范围内
-            if position_visible_on_any_monitor(app, sx, sy, w, h) {
-                builder = builder.position(sx as f64, sy as f64);
-            }
+            builder = builder.position(sx as f64, sy as f64);
         }
     }
 
     let window = builder
         .build()
         .map_err(|e| AppError::Other(format!("window build failed: {}", e)))?;
-
-    // 确保新建窗口立刻可见 + 获得焦点（否则有时被其它 app 盖住）
-    let _ = window.show();
-    let _ = window.set_focus();
 
     attach_geometry_listener(&window, sticky.id.clone())?;
     Ok(window)
