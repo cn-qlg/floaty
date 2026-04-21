@@ -116,19 +116,23 @@ export function extractDues(md: string): DueEntry[] {
   let nonEmptyIndex = 0;
   for (const line of lines) {
     if (line.trim() === "") continue;
-    const matches = [...line.matchAll(DUE_RE_GLOBAL)];
-    if (matches.length > 0) {
-      const preview = line
-        .replace(DUE_RE_GLOBAL, "")
-        .replace(/^- \[[ x]\] /, "")
-        .replace(/^#+\s+/, "")
-        .replace(/\*\*(.+?)\*\*/g, "$1")
-        .replace(/\*(.+?)\*/g, "$1")
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-        .trim()
-        .slice(0, 50);
-      for (const m of matches) {
-        entries.push({ itemIndex: nonEmptyIndex, iso: m[1], preview });
+    // 已完成的 todo 不再产生提醒
+    const isCompletedTodo = /^- \[x\] /.test(line);
+    if (!isCompletedTodo) {
+      const matches = [...line.matchAll(DUE_RE_GLOBAL)];
+      if (matches.length > 0) {
+        const preview = line
+          .replace(DUE_RE_GLOBAL, "")
+          .replace(/^- \[[ x]\] /, "")
+          .replace(/^#+\s+/, "")
+          .replace(/\*\*(.+?)\*\*/g, "$1")
+          .replace(/\*(.+?)\*/g, "$1")
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+          .trim()
+          .slice(0, 50);
+        for (const m of matches) {
+          entries.push({ itemIndex: nonEmptyIndex, iso: m[1], preview });
+        }
       }
     }
     nonEmptyIndex++;

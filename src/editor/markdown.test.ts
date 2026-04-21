@@ -150,7 +150,17 @@ describe("extractDues", () => {
   });
 
   it("strips markdown decoration from preview", () => {
-    const md = "- [x] **urgent** [link](http://x) @due:2026-04-20T10:00:00Z";
+    const md = "- [ ] **urgent** [link](http://x) @due:2026-04-20T10:00:00Z";
     expect(extractDues(md)[0].preview).toBe("urgent link");
+  });
+
+  it("skips completed todos (no reminder for '- [x]')", () => {
+    const md = [
+      "- [x] done @due:2026-04-20T10:00:00Z",
+      "- [ ] pending @due:2026-04-21T10:00:00Z",
+    ].join("\n");
+    const dues = extractDues(md);
+    expect(dues).toHaveLength(1);
+    expect(dues[0].iso).toBe("2026-04-21T10:00:00Z");
   });
 });

@@ -81,11 +81,6 @@ export function refreshPillDom(el: HTMLElement, now: Date = new Date()): void {
     el.textContent = "";
     return;
   }
-  const tier = tierOf(iso, now);
-  const color = tierColor(tier);
-  el.textContent = tierLabel(tier, iso, now);
-  el.style.backgroundColor = color.bg;
-  el.style.color = color.fg;
   el.style.padding = "1px 6px";
   el.style.margin = "0 2px";
   el.style.borderRadius = "8px";
@@ -95,6 +90,26 @@ export function refreshPillDom(el: HTMLElement, now: Date = new Date()): void {
   el.style.verticalAlign = "middle";
   el.style.cursor = "default";
   el.style.userSelect = "none";
+
+  // 所在 todo 已 check → pill 灰掉，不再染色 / 报逾期
+  const completedLi = el.closest<HTMLElement>('li[data-checked="true"]');
+  if (completedLi) {
+    el.textContent = tierLabel("later", iso, now).replace(/^⏰\s?/, "");
+    el.style.backgroundColor = "rgba(0,0,0,0.1)";
+    el.style.color = "inherit";
+    el.style.opacity = "0.55";
+    el.style.textDecoration = "line-through";
+    el.dataset.tier = "completed";
+    return;
+  }
+
+  const tier = tierOf(iso, now);
+  const color = tierColor(tier);
+  el.textContent = tierLabel(tier, iso, now);
+  el.style.backgroundColor = color.bg;
+  el.style.color = color.fg;
+  el.style.opacity = "1";
+  el.style.textDecoration = "none";
   el.dataset.tier = tier;
 }
 
