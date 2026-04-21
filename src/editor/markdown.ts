@@ -8,6 +8,10 @@ type ProseNode = {
 
 type ProseDoc = { type: "doc"; content?: ProseNode[] };
 
+// ============================================================
+// Serialize: ProseMirror doc → markdown string
+// ============================================================
+
 export function docToMarkdown(doc: ProseNode | ProseDoc): string {
   if (!("content" in doc) || !doc.content) return "";
   return doc.content.map(serializeBlock).join("\n");
@@ -23,6 +27,28 @@ function serializeBlock(node: ProseNode): string {
       return serializeInline(node.content ?? []);
     case "taskList":
       return (node.content ?? []).map(serializeTaskItem).join("\n");
+    case "bulletList":
+      return (node.content ?? [])
+        .map((li) => "- " + serializeListItemInner(li))
+        .join("\n");
+    case "orderedList":
+      return (node.content ?? [])
+        .map((li, i) => `${i + 1}. ` + serializeListItemInner(li))
+        .join("\n");
+    case "blockquote":
+      return (node.content ?? [])
+        .map(serializeBlock)
+        .join("\n")
+        .split("\n")
+        .map((l) => "> " + l)
+        .join("\n");
+    case "codeBlock": {
+      const lang = node.attrs?.language ?? "";
+      const body = (node.content ?? []).map((c) => c.text ?? "").join("");
+      return "```" + lang + "\n" + body + "\n```";
+    }
+    case "horizontalRule":
+      return "---";
     default:
       return serializeInline(node.content ?? []);
   }
@@ -34,68 +60,46 @@ function serializeTaskItem(node: ProseNode): string {
   return `- [${checked}] ${inner}`;
 }
 
+function serializeListItemInner(li: ProseNode): string {
+  // A listItem wraps one or more paragraph/block nodes; join their inline text.
+  return (li.content ?? []).map(serializeBlock).join("\n  ");
+}
+
 function serializeInline(nodes: ProseNode[]): string {
-  return nodes.map((n) => {
-    if (n.type === "dueTime") {
-      const iso = n.attrs?.datetime ?? "";
-      return iso ? `@due:${iso}` : "";
-    }
-    if (n.type !== "text") return "";
-    let text = n.text ?? "";
-    const marks = n.marks ?? [];
-    for (const m of marks) {
-      if (m.type === "bold") text = `**${text}**`;
-      else if (m.type === "italic") text = `*${text}*`;
-      else if (m.type === "link") text = `[${text}](${m.attrs?.href ?? ""})`;
-    }
-    return text;
-  }).join("");
+  return nodes
+    .map((n) => {
+      if (n.type === "dueTime") {
+        const iso = n.attrs?.datetime ?? "";
+        return iso ? `@due:${iso}` : "";
+      }
+      if (n.type === "hardBreak") return "\n";
+      if (n.type !== "text") return "";
+      let text = n.text ?? "";
+      const marks = n.marks ?? [];
+      // 顺序：先 code（锁定内容），再 strike，bold，italic，最后 link 包外
+      for (const m of marks) {
+        if (m.type === "code") text = "`" + text + "`";
+      }
+      for (const m of marks) {
+        if (m.type === "strike") text = `~~${text}~~`;
+      }
+      for (const m of marks) {
+        if (m.type === "bold") text = `**${text}**`;
+      }
+      for (const m of marks) {
+        if (m.type === "italic") text = `*${text}*`;
+      }
+      for (const m of marks) {
+        if (m.type === "link") text = `[${text}](${m.attrs?.href ?? ""})`;
+      }
+      return text;
+    })
+    .join("");
 }
 
-export function markdownToDoc(md: string): ProseDoc {
-  const lines = md.split("\n");
-  const blocks: ProseNode[] = [];
-  let pendingTasks: ProseNode[] = [];
-
-  const flushTasks = () => {
-    if (pendingTasks.length > 0) {
-      blocks.push({ type: "taskList", content: pendingTasks });
-      pendingTasks = [];
-    }
-  };
-
-  for (const line of lines) {
-    const taskMatch = line.match(/^- \[( |x)\] (.*)$/);
-    if (taskMatch) {
-      pendingTasks.push({
-        type: "taskItem",
-        attrs: { checked: taskMatch[1] === "x" },
-        content: [{ type: "paragraph", content: parseInline(taskMatch[2]) }],
-      });
-      continue;
-    }
-    flushTasks();
-    const headingMatch = line.match(/^(#{1,6}) (.*)$/);
-    if (headingMatch) {
-      blocks.push({
-        type: "heading",
-        attrs: { level: headingMatch[1].length },
-        content: parseInline(headingMatch[2]),
-      });
-      continue;
-    }
-    if (line.trim() === "") continue;
-    blocks.push({ type: "paragraph", content: parseInline(line) });
-  }
-  flushTasks();
-
-  // TipTap 需要至少一个块节点，空 markdown → 空段落
-  if (blocks.length === 0) {
-    blocks.push({ type: "paragraph", content: [] });
-  }
-
-  return { type: "doc", content: blocks };
-}
+// ============================================================
+// Parse: markdown string → ProseMirror doc
+// ============================================================
 
 const DUE_RE = /@due:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/;
 const DUE_RE_GLOBAL = /@due:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/g;
@@ -106,11 +110,6 @@ export interface DueEntry {
   preview: string;
 }
 
-/**
- * 扫描 markdown，每行可能出现一个或多个 @due:ISO token。
- * 每条 todo/段落的 `itemIndex` 是它在原 markdown 里的行号（0-based，跳过空行）。
- * preview 是该行文本去掉 markdown 装饰后的前 50 字（供通知展示）。
- */
 export function extractDues(md: string): DueEntry[] {
   const entries: DueEntry[] = [];
   const lines = md.split("\n");
@@ -137,50 +136,207 @@ export function extractDues(md: string): DueEntry[] {
   return entries;
 }
 
+export function markdownToDoc(md: string): ProseDoc {
+  const lines = md.split("\n");
+  const blocks: ProseNode[] = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // --- Code block (```lang\n...\n```) ---
+    const fenceMatch = line.match(/^```(\S*)\s*$/);
+    if (fenceMatch) {
+      const lang = fenceMatch[1] || null;
+      const body: string[] = [];
+      i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++; // 吃掉闭合 ```
+      blocks.push({
+        type: "codeBlock",
+        attrs: lang ? { language: lang } : {},
+        content: body.length ? [{ type: "text", text: body.join("\n") }] : [],
+      });
+      continue;
+    }
+
+    // --- Horizontal rule ---
+    if (/^-{3,}\s*$/.test(line) || /^\*{3,}\s*$/.test(line)) {
+      blocks.push({ type: "horizontalRule" });
+      i++;
+      continue;
+    }
+
+    // --- Heading ---
+    const headingMatch = line.match(/^(#{1,6}) (.*)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: "heading",
+        attrs: { level: headingMatch[1].length },
+        content: parseInline(headingMatch[2]),
+      });
+      i++;
+      continue;
+    }
+
+    // --- Blockquote (consecutive > lines) ---
+    if (/^>\s/.test(line)) {
+      const quotedLines: string[] = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        quotedLines.push(lines[i].replace(/^>\s?/, ""));
+        i++;
+      }
+      const innerDoc = markdownToDoc(quotedLines.join("\n"));
+      blocks.push({ type: "blockquote", content: innerDoc.content ?? [] });
+      continue;
+    }
+
+    // --- Task list (- [ ] / - [x]) ---
+    if (/^- \[( |x)\] /.test(line)) {
+      const tasks: ProseNode[] = [];
+      while (i < lines.length) {
+        const t = lines[i].match(/^- \[( |x)\] (.*)$/);
+        if (!t) break;
+        tasks.push({
+          type: "taskItem",
+          attrs: { checked: t[1] === "x" },
+          content: [{ type: "paragraph", content: parseInline(t[2]) }],
+        });
+        i++;
+      }
+      blocks.push({ type: "taskList", content: tasks });
+      continue;
+    }
+
+    // --- Ordered list (1. / 2. ...) ---
+    if (/^\d+\.\s/.test(line)) {
+      const items: ProseNode[] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        const text = lines[i].replace(/^\d+\.\s/, "");
+        items.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: parseInline(text) }],
+        });
+        i++;
+      }
+      blocks.push({ type: "orderedList", content: items });
+      continue;
+    }
+
+    // --- Bullet list (- / * but NOT task) ---
+    if (/^[-*]\s(?!\[[ x]\]\s)/.test(line)) {
+      const items: ProseNode[] = [];
+      while (
+        i < lines.length &&
+        /^[-*]\s/.test(lines[i]) &&
+        !/^- \[( |x)\] /.test(lines[i])
+      ) {
+        const text = lines[i].replace(/^[-*]\s/, "");
+        items.push({
+          type: "listItem",
+          content: [{ type: "paragraph", content: parseInline(text) }],
+        });
+        i++;
+      }
+      blocks.push({ type: "bulletList", content: items });
+      continue;
+    }
+
+    // --- Empty line ---
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+
+    // --- Paragraph (default) ---
+    blocks.push({ type: "paragraph", content: parseInline(line) });
+    i++;
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({ type: "paragraph", content: [] });
+  }
+
+  return { type: "doc", content: blocks };
+}
+
 function parseInline(text: string): ProseNode[] {
   const tokens: ProseNode[] = [];
   let i = 0;
+
+  const pushText = (s: string, marks?: ProseNode["marks"]) => {
+    if (!s) return;
+    if (marks && marks.length) tokens.push({ type: "text", text: s, marks });
+    else tokens.push({ type: "text", text: s });
+  };
+
   while (i < text.length) {
-    if (text.startsWith("**", i)) {
-      const end = text.indexOf("**", i + 2);
-      if (end > i + 2) {
-        tokens.push({ type: "text", text: text.slice(i + 2, end), marks: [{ type: "bold" }] });
-        i = end + 2;
-        continue;
-      }
-    }
-    if (text[i] === "*") {
-      const end = text.indexOf("*", i + 1);
+    // `code`
+    if (text[i] === "`") {
+      const end = text.indexOf("`", i + 1);
       if (end > i + 1) {
-        tokens.push({ type: "text", text: text.slice(i + 1, end), marks: [{ type: "italic" }] });
+        pushText(text.slice(i + 1, end), [{ type: "code" }]);
         i = end + 1;
         continue;
       }
     }
+    // ~~strike~~
+    if (text.startsWith("~~", i)) {
+      const end = text.indexOf("~~", i + 2);
+      if (end > i + 2) {
+        pushText(text.slice(i + 2, end), [{ type: "strike" }]);
+        i = end + 2;
+        continue;
+      }
+    }
+    // **bold**
+    if (text.startsWith("**", i)) {
+      const end = text.indexOf("**", i + 2);
+      if (end > i + 2) {
+        pushText(text.slice(i + 2, end), [{ type: "bold" }]);
+        i = end + 2;
+        continue;
+      }
+    }
+    // *italic*
+    if (text[i] === "*") {
+      const end = text.indexOf("*", i + 1);
+      if (end > i + 1) {
+        pushText(text.slice(i + 1, end), [{ type: "italic" }]);
+        i = end + 1;
+        continue;
+      }
+    }
+    // [text](url)
     if (text[i] === "[") {
       const close = text.indexOf("](", i);
       const end = close > 0 ? text.indexOf(")", close) : -1;
       if (close > 0 && end > 0) {
         const linkText = text.slice(i + 1, close);
         const href = text.slice(close + 2, end);
-        tokens.push({ type: "text", text: linkText, marks: [{ type: "link", attrs: { href } }] });
+        pushText(linkText, [{ type: "link", attrs: { href } }]);
         i = end + 1;
         continue;
       }
     }
-    if (text[i] === "@") {
+    // @due:ISO at cursor position
+    if (text.startsWith("@due:", i)) {
       const rest = text.slice(i);
-      const match = rest.match(DUE_RE);
-      if (match && match.index === 0) {
-        tokens.push({ type: "dueTime", attrs: { datetime: match[1] } });
-        i += match[0].length;
+      const dueM = rest.match(DUE_RE);
+      if (dueM && dueM.index === 0) {
+        tokens.push({ type: "dueTime", attrs: { datetime: dueM[1] } });
+        i += dueM[0].length;
         continue;
       }
     }
+    // Accumulate normal chars until next special
     let j = i;
-    while (j < text.length && !"*[@".includes(text[j])) j++;
+    while (j < text.length && !"*[`~".includes(text[j]) && !text.startsWith("@due:", j)) j++;
     if (j === i) j = i + 1;
-    tokens.push({ type: "text", text: text.slice(i, j) });
+    pushText(text.slice(i, j));
     i = j;
   }
   return tokens;

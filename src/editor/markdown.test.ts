@@ -72,6 +72,59 @@ describe("markdown round-trip", () => {
   });
 });
 
+describe("markdown extended blocks", () => {
+  it("round-trips bullet list", () => {
+    const md = "- apple\n- banana";
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0].type).toBe("bulletList");
+    expect(doc.content?.[0].content).toHaveLength(2);
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it("round-trips ordered list", () => {
+    const md = "1. one\n2. two\n3. three";
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0].type).toBe("orderedList");
+    expect(doc.content?.[0].content).toHaveLength(3);
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it("round-trips blockquote", () => {
+    const md = "> wisdom";
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0].type).toBe("blockquote");
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it("round-trips code block", () => {
+    const md = "```ts\nconst x = 1;\n```";
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0].type).toBe("codeBlock");
+    expect(doc.content?.[0].attrs?.language).toBe("ts");
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it("round-trips horizontal rule", () => {
+    expect(docToMarkdown(markdownToDoc("---"))).toBe("---");
+  });
+
+  it("round-trips strikethrough", () => {
+    const md = "~~gone~~";
+    expect(docToMarkdown(markdownToDoc(md))).toBe(md);
+  });
+
+  it("round-trips inline code", () => {
+    const md = "use `foo` here";
+    expect(docToMarkdown(markdownToDoc(md))).toBe(md);
+  });
+
+  it("task list still wins over bullet for '- [ ]' lines", () => {
+    const doc = markdownToDoc("- [ ] task\n- item");
+    expect(doc.content?.[0].type).toBe("taskList");
+    expect(doc.content?.[1].type).toBe("bulletList");
+  });
+});
+
 describe("extractDues", () => {
   it("returns empty when no @due", () => {
     expect(extractDues("- [ ] plain todo")).toEqual([]);
