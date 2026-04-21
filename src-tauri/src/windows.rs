@@ -228,10 +228,55 @@ pub async fn restore_on_startup(app: &AppHandle, db: &Db) -> AppResult<()> {
     let all = db::stickies::list_all(db).await?;
     if all.is_empty() {
         let fresh = db::stickies::create_default(db).await?;
+        // 首次安装：塞一张欢迎便签，内容直接渲染给用户看，不需要懂 markdown
+        let _ = db::items::upsert(
+            db,
+            db::items::ItemUpsert {
+                id: None,
+                sticky_id: fresh.id.clone(),
+                content_md: WELCOME_MARKDOWN.to_string(),
+                due_at: None,
+                sort_order: 0,
+            },
+        )
+        .await;
         open(app, &fresh).await?;
     }
     Ok(())
 }
+
+const WELCOME_MARKDOWN: &str = r#"# 欢迎使用 Floaty 👋
+
+这是你的第一张便签。试着直接在这里改。
+
+## 快速上手
+
+- [ ] 点左边方框 ✅ 打勾标记完成
+- [ ] 回车新增一条
+- [ ] 输入 @ 唤起时间选择器
+- [ ] 或者直接打"今天下午3点"，按 Tab 接受
+- [ ] ⌘⌫ 删除这张便签（带确认）
+
+## 菜单栏（屏幕右上角 📋 图标）
+
+点开可以：新建便签、显示/隐藏单张、显示全部、**一键排版**（重新摆放成网格）、偏好设置。
+
+## 快捷键
+
+- **⌘⇧N** 全局新建（任何 app 都能用）
+- **⌘W** 隐藏 · **⌘⇧P** 切换置顶 · **⌘,** 外观设置
+
+## 也支持
+
+- 拖顶部条移动；右下角 resize
+- `# 标题` / `**粗体**` / `[链接](https://github.com/cn-qlg/floaty)`
+- `> 引用` / `- 列表` / `1. 有序`
+- 右上角 **⚙** 改背景色 / 透明度 / 字号 / 字色
+- 📌 按钮置顶到所有窗口之上
+
+遇到问题？菜单栏 → 偏好设置 → 完整快捷键列表和数据位置。
+"#;
+
 
 /// 合理性 clamp：sticky 宽高应在 [200, 1600] 之间，否则重置为默认 320×420
 fn sanitize_size(w: i64, h: i64) -> (i64, i64) {
