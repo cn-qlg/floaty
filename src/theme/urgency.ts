@@ -43,13 +43,14 @@ export function tierLabel(tier: Tier, dueAtIso: string, now: Date = new Date()):
   if (tier === "urgent") {
     return `⏰ ${formatDuration(diffMs)}`;
   }
+  // 不用 📅 / 🗓 / 📆 —— macOS 的日历 emoji 会固定渲染日期数字（"17"），用 ⏰ 代替
   if (tier === "today") {
-    return `📅 今天 ${formatClock(due)}`;
+    return `⏰ 今天 ${formatClock(due)}`;
   }
   if (tier === "this-week") {
-    return `📅 ${formatWeekday(due)}`;
+    return `⏰ ${formatWeekday(due)} ${formatClock(due)}`;
   }
-  return `📅 ${formatShortDate(due)}`;
+  return `⏰ ${formatShortDate(due)} ${formatClock(due)}`;
 }
 
 function formatDuration(ms: number): string {

@@ -42,8 +42,10 @@ describe("tierLabel", () => {
     expect(label).toMatch(/^⚠/);
   });
 
-  it("renders later as short date", () => {
+  it("renders later with ⏰ clock + short date (no 📅 which shows as '17' on macOS)", () => {
     const label = tierLabel("later", new Date(2026, 4, 1, 10).toISOString(), now);
-    expect(label).toMatch(/^📅/);
+    expect(label).toMatch(/^⏰/);
+    expect(label).toMatch(/\d+\/\d+/);
+    expect(label).not.toContain("📅");
   });
 });

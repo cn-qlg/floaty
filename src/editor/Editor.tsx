@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { docToMarkdown, markdownToDoc } from "./markdown";
 import { DueTime, refreshAllPills } from "./DueTime";
 import { DueTimePicker } from "./DueTimePicker";
+import { parseTimeHint, type TimeHint } from "./timeHints";
+import { tierLabel, tierOf } from "../theme/urgency";
 
 interface EditorProps {
   initialMarkdown: string;
@@ -18,11 +20,22 @@ type PickerState =
   | { x: number; y: number; mode: "insert" }
   | { x: number; y: number; mode: "edit"; pos: number };
 
+interface GhostState {
+  from: number;
+  to: number;
+  hint: TimeHint;
+  x: number;
+  y: number;
+}
+
 export function Editor({ initialMarkdown, onChange }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [picker, setPicker] = useState<PickerState>(null);
   const pickerRef = useRef<PickerState>(null);
   pickerRef.current = picker;
+  const [ghost, setGhost] = useState<GhostState | null>(null);
+  const ghostRef = useRef<GhostState | null>(null);
+  ghostRef.current = ghost;
 
   const editor = useEditor({
     extensions: [
@@ -55,10 +68,24 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
           event.preventDefault();
           return true;
         }
-        if (event.key === "Escape" && pickerRef.current) {
-          setPicker(null);
+        // Tab 接受 ghost 时间预览
+        if (event.key === "Tab" && ghostRef.current && !pickerRef.current) {
+          const g = ghostRef.current;
+          acceptGhost(g);
           event.preventDefault();
           return true;
+        }
+        if (event.key === "Escape") {
+          if (pickerRef.current) {
+            setPicker(null);
+            event.preventDefault();
+            return true;
+          }
+          if (ghostRef.current) {
+            setGhost(null);
+            event.preventDefault();
+            return true;
+          }
         }
         return false;
       },
@@ -87,6 +114,61 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   }, [editor]);
 
   useEffect(() => () => editor?.destroy(), [editor]);
+
+  // 每次 selection / doc update 重算 ghost 预览
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      if (pickerRef.current) {
+        setGhost(null);
+        return;
+      }
+      const { state } = editor;
+      const sel = state.selection;
+      if (!sel.empty) {
+        setGhost(null);
+        return;
+      }
+      // 取当前 paragraph/taskItem 起点到光标的纯文本。
+      // 用 $from.parent 拿到最内层块节点（paragraph），再 textBetween 0 → offset；
+      // 比 $from.start() + doc.textBetween 更鲁棒（对 taskItem > paragraph 结构友好）。
+      const $from = sel.$from;
+      const text = $from.parent.textBetween(0, $from.parentOffset, "\n", " ");
+      const hint = parseTimeHint(text);
+      if (!hint) {
+        setGhost(null);
+        return;
+      }
+      // 匹配文本可以不在 cursor 尾部（"今天 24 点吃饭"）：from/to 由 hint.start/end 换算 doc 坐标
+      const paraStart = $from.start();
+      const from = paraStart + hint.start;
+      const to = paraStart + hint.end;
+      const coords = editor.view.coordsAtPos(to);
+      setGhost({ from, to, hint, x: coords.left, y: coords.bottom });
+    };
+    editor.on("update", update);
+    editor.on("selectionUpdate", update);
+    update();
+    return () => {
+      editor.off("update", update);
+      editor.off("selectionUpdate", update);
+    };
+  }, [editor]);
+
+  const acceptGhost = (g: GhostState) => {
+    if (!editor) return;
+    const iso = g.hint.date.toISOString();
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: g.from, to: g.to })
+      .insertContent([
+        { type: "dueTime", attrs: { datetime: iso } },
+        { type: "text", text: " " },
+      ])
+      .run();
+    setGhost(null);
+  };
 
   const handlePick = (iso: string) => {
     if (!editor) return;
@@ -130,6 +212,39 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
           onCancel={() => setPicker(null)}
         />
       )}
+      {ghost && !picker && <GhostPreview ghost={ghost} onAccept={() => acceptGhost(ghost)} />}
+    </div>
+  );
+}
+
+function formatDebugTime(d: Date): string {
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}
+
+function GhostPreview({ ghost, onAccept }: { ghost: GhostState; onAccept: () => void }) {
+  const iso = ghost.hint.date.toISOString();
+  const tier = tierOf(iso);
+  const label = tierLabel(tier, iso);
+  const debugTime = formatDebugTime(ghost.hint.date);
+  return (
+    <div
+      className="fixed z-40 pointer-events-auto select-none text-[10px]"
+      style={{ left: ghost.x + 4, top: ghost.y - 2 }}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onAccept();
+      }}
+      title="按 Tab 接受"
+    >
+      <span className="inline-flex items-center gap-1.5 px-1.5 py-[1px] rounded border border-dashed border-black/30 bg-white/80 text-black/60">
+        <span>{label}</span>
+        <span className="font-mono text-[9px] opacity-60">{debugTime}</span>
+        <kbd className="px-1 rounded bg-black/10 text-[9px]">Tab</kbd>
+      </span>
     </div>
   );
 }
