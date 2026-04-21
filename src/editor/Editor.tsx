@@ -1,5 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import { InputRule } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
+import { Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -12,29 +13,38 @@ import { parseTimeHint, type TimeHint } from "./timeHints";
 import { tierLabel, tierOf } from "../theme/urgency";
 
 /**
- * 键入 `[text](url)` + 任意字符触发 → 替换为链接化的 "text"（保留 link mark）。
- * 不用 markInputRule，因为那个只认"最后一个 capture 作为展示文本"，而我们需要
- * 第一个 capture 是文字、第二个是 URL。手写 InputRule 精确控制。
+ * 键入 `)` 时，往前扫描看是否刚好构成 `[text](url)`；是则替换为 link mark。
+ * 用 ProseMirror 的 handleTextInput 直接处理，不走 TipTap 的 InputRule 封装
+ * （避免 capture-group 约定和 Link 扩展自身规则的冲突）。
  */
-const MarkdownLink = Link.extend({
-  addInputRules() {
+const MarkdownLinkShortcut = Extension.create({
+  name: "markdownLinkShortcut",
+  addProseMirrorPlugins() {
     return [
-      new InputRule({
-        find: /\[([^\]]+)\]\(([^)]+)\)$/,
-        handler: ({ state, range, match, chain }) => {
-          const [, text, url] = match;
-          console.log("[floaty] link rule fired:", { text, url, range });
-          if (!text || !url) return null;
-          // 用 chain() 而不是直接改 state.tr —— 更符合 TipTap 约定
-          chain()
-            .deleteRange(range)
-            .insertContent({
-              type: "text",
-              text,
-              marks: [{ type: "link", attrs: { href: url } }],
-            })
-            .unsetMark("link")
-            .run();
+      new Plugin({
+        props: {
+          handleTextInput(view, from, to, text) {
+            if (text !== ")") return false;
+            const $from = view.state.doc.resolve(from);
+            const blockFrom = $from.start();
+            const before = view.state.doc.textBetween(blockFrom, from, "\n", "\n");
+            const candidate = before + text;
+            const m = candidate.match(/\[([^\]\n]+)\]\(([^)\s]+)\)$/);
+            if (!m) return false;
+            const matchStart = from - (m[0].length - 1);
+            const linkMarkType = view.state.schema.marks.link;
+            if (!linkMarkType) return false;
+            const tr = view.state.tr;
+            tr.replaceRangeWith(
+              matchStart,
+              to,
+              view.state.schema.text(m[1], [linkMarkType.create({ href: m[2] })]),
+            );
+            tr.removeStoredMark(linkMarkType);
+            view.dispatch(tr);
+            console.log("[floaty] link shortcut fired:", { text: m[1], url: m[2] });
+            return true;
+          },
         },
       }),
     ];
@@ -73,7 +83,8 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       TaskList,
       TaskItem.configure({ nested: false }),
-      MarkdownLink.configure({ openOnClick: false }),
+      Link.configure({ openOnClick: false }),
+      MarkdownLinkShortcut,
       DueTime.configure({
         onEdit: (pos: number, iso: string) => {
           const el = containerRef.current?.querySelector<HTMLElement>(
