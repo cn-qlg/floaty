@@ -35,7 +35,10 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
 
     if let (Some(x), Some(y)) = (sticky.x, sticky.y) {
         if let Some((sx, sy)) = sanitize_position(x, y) {
-            builder = builder.position(sx as f64, sy as f64);
+            // 进一步确认位置至少在某个显示器可见范围内
+            if position_visible_on_any_monitor(app, sx, sy, w, h) {
+                builder = builder.position(sx as f64, sy as f64);
+            }
         }
     }
 
@@ -174,16 +177,47 @@ fn sanitize_size(w: i64, h: i64) -> (i64, i64) {
     (if w_ok { w } else { 320 }, if h_ok { h } else { 420 })
 }
 
-/// 合理性 clamp：保守屏幕范围（含多显示器）。离谱坐标视为 stale bug 数据，
-/// 清掉让系统用默认位置放置窗口。
-/// - x in [-3000, 5000]：允许副屏在左/右
-/// - y in [-500, 3000]：允许副屏在上方少量 off-screen，但挡住因物理/逻辑单位 bug 导致的 y=-1000+
+/// 合理性 clamp：保守屏幕范围（含多显示器）。离谱坐标视为 stale bug 数据。
 fn sanitize_position(x: i64, y: i64) -> Option<(i64, i64)> {
     if (-3000..=5000).contains(&x) && (-500..=3000).contains(&y) {
         Some((x, y))
     } else {
         None
     }
+}
+
+/// 检查 (x,y,w,h) 矩形是否与任一已连接显示器的可见区域有重叠。
+/// 没有重叠（即窗口完全在所有屏幕之外）→ 返回 false，让窗口用默认位置。
+fn position_visible_on_any_monitor(app: &AppHandle, x: i64, y: i64, w: i64, h: i64) -> bool {
+    // 至少要露出 40 像素宽 + 30 像素高才算"可见"
+    let min_overlap_w = 40_i64;
+    let min_overlap_h = 30_i64;
+    let win_right = x + w;
+    let win_bottom = y + h;
+
+    let monitors = match app.available_monitors() {
+        Ok(m) => m,
+        Err(_) => return true, // 无法取显示器信息时，保守放行
+    };
+    for mon in monitors {
+        let scale = mon.scale_factor();
+        let pos = mon.position();
+        let size = mon.size();
+        // 显示器坐标是物理像素；转换为逻辑像素（与 window.position 同单位）
+        let mx = (pos.x as f64 / scale) as i64;
+        let my = (pos.y as f64 / scale) as i64;
+        let mw = (size.width as f64 / scale) as i64;
+        let mh = (size.height as f64 / scale) as i64;
+        let mon_right = mx + mw;
+        let mon_bottom = my + mh;
+
+        let overlap_w = win_right.min(mon_right) - x.max(mx);
+        let overlap_h = win_bottom.min(mon_bottom) - y.max(my);
+        if overlap_w >= min_overlap_w && overlap_h >= min_overlap_h {
+            return true;
+        }
+    }
+    false
 }
 
 /// 绑定 Move/Resize → 写回 DB。关键：Tauri 窗口 getter 返回 **物理像素**，
