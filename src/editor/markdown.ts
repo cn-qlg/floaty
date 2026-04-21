@@ -89,6 +89,11 @@ export function markdownToDoc(md: string): ProseDoc {
   }
   flushTasks();
 
+  // TipTap 需要至少一个块节点，空 markdown → 空段落
+  if (blocks.length === 0) {
+    blocks.push({ type: "paragraph", content: [] });
+  }
+
   return { type: "doc", content: blocks };
 }
 

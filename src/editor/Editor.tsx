@@ -1,5 +1,5 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import { markInputRule } from "@tiptap/core";
+import { InputRule } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -11,16 +11,28 @@ import { DueTimePicker } from "./DueTimePicker";
 import { parseTimeHint, type TimeHint } from "./timeHints";
 import { tierLabel, tierOf } from "../theme/urgency";
 
-/** 加 markdown link 输入规则：键入 `[text](url) ` 自动变成带 link mark 的 "text" */
+/**
+ * 键入 `[text](url)` + 任意字符触发 → 替换为链接化的 "text"（保留 link mark）。
+ * 不用 markInputRule，因为那个只认"最后一个 capture 作为展示文本"，而我们需要
+ * 第一个 capture 是文字、第二个是 URL。手写 InputRule 精确控制。
+ */
+const linkInputRule = new InputRule({
+  find: /\[([^\]]+)\]\((\S+?)\)$/,
+  handler: ({ state, range, match }) => {
+    const text = match[1];
+    const url = match[2];
+    if (!text || !url) return null;
+    const linkMark = state.schema.marks.link.create({ href: url });
+    const tr = state.tr.replaceRangeWith(range.from, range.to, state.schema.text(text, [linkMark]));
+    // 光标放在插入的链接之后，让用户能继续打字且不再处于 link 标记内
+    tr.removeStoredMark(state.schema.marks.link);
+    return null;
+  },
+});
+
 const MarkdownLink = Link.extend({
   addInputRules() {
-    return [
-      markInputRule({
-        find: /\[([^\]]+)\]\((\S+?)\)$/,
-        type: this.type,
-        getAttributes: (match) => ({ href: match[2] }),
-      }),
-    ];
+    return [linkInputRule];
   },
 });
 
