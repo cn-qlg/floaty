@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { ipc } from "../ipc/client";
+import { kbd } from "../platform";
 
 interface Stats {
   stickies: number;
@@ -125,17 +126,19 @@ export function PreferencesPage() {
               checked={globalEnabled}
               onChange={(e) => toggleGlobal(e.target.checked)}
             />
-            <span>启用全局 <Kbd>⌘⇧N</Kbd>（任何 app 下都能快速新建便签）</span>
+            <span>
+              启用全局 <Kbd>{kbd(["mod", "shift", "N"])}</Kbd>（任何 app 下都能快速新建便签）
+            </span>
           </label>
           <div className="text-[11px] space-y-1 opacity-85">
-            <Row k="⌘⇧N" d="全局：新建便签" />
-            <Row k="⌘N" d="便签聚焦时：新建便签" />
-            <Row k="⌘W" d="隐藏当前便签（不删除）" />
-            <Row k="⌘⇧P" d="切换置顶" />
-            <Row k="⌘," d="打开/关闭外观设置" />
-            <Row k="⌘⌫" d="删除当前便签（带确认）" />
+            <Row k={kbd(["mod", "shift", "N"])} d="全局：新建便签" />
+            <Row k={kbd(["mod", "N"])} d="便签聚焦时：新建便签" />
+            <Row k={kbd(["mod", "W"])} d="隐藏当前便签（不删除）" />
+            <Row k={kbd(["mod", "shift", "P"])} d="切换置顶" />
+            <Row k={kbd(["mod", ","])} d="打开/关闭外观设置" />
+            <Row k={kbd(["mod", "backspace"])} d="删除当前便签（带确认）" />
             <Row k="@" d="编辑区：打开时间选择器" />
-            <Row k="Tab" d="编辑区：接受时间 ghost 预览" />
+            <Row k={kbd(["tab"])} d="编辑区：接受时间 ghost 预览" />
           </div>
           <div className="text-[10px] opacity-50 mt-2">
             快捷键自定义功能后续版本提供。

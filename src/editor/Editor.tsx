@@ -1,4 +1,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import type { Editor as TipTapEditorT } from "@tiptap/core";
+import type { EditorState } from "@tiptap/pm/state";
 import { Extension } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
@@ -246,6 +249,73 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   return (
     <div ref={containerRef} className="relative">
       <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none" />
+      {editor && (
+        <BubbleMenu
+          editor={editor}
+          shouldShow={({ editor, state }: { editor: TipTapEditorT; state: EditorState }) => {
+            const { from, to, empty } = state.selection;
+            if (empty) return false;
+            if (to - from < 1) return false;
+            return editor.isEditable;
+          }}
+        >
+          <div className="flex items-center gap-0.5 rounded-md shadow-lg border border-black/10 bg-white/95 backdrop-blur-sm px-1 py-0.5">
+            <FmtBtn
+              active={editor.isActive("bold")}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              title="粗体 ⌘B"
+            >
+              <strong>B</strong>
+            </FmtBtn>
+            <FmtBtn
+              active={editor.isActive("italic")}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              title="斜体 ⌘I"
+            >
+              <em>I</em>
+            </FmtBtn>
+            <FmtBtn
+              active={editor.isActive("strike")}
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              title="删除线 ⌘⇧X"
+            >
+              <s>S</s>
+            </FmtBtn>
+            <FmtBtn
+              active={editor.isActive("code")}
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              title="行内代码"
+            >
+              <code style={{ fontSize: "11px" }}>{"<>"}</code>
+            </FmtBtn>
+            <div className="w-px h-4 bg-black/10 mx-0.5" />
+            <FmtBtn
+              active={editor.isActive("heading", { level: 1 })}
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              title="一级标题"
+            >
+              H1
+            </FmtBtn>
+            <FmtBtn
+              active={editor.isActive("heading", { level: 2 })}
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              title="二级标题"
+            >
+              H2
+            </FmtBtn>
+            <FmtBtn
+              onClick={() => {
+                const url = window.prompt("链接地址：");
+                if (!url) return;
+                editor.chain().focus().setLink({ href: url }).run();
+              }}
+              title="添加链接"
+            >
+              🔗
+            </FmtBtn>
+          </div>
+        </BubbleMenu>
+      )}
       {picker && (
         <DueTimePicker
           x={picker.x}
@@ -256,6 +326,35 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
       )}
       {ghost && !picker && <GhostPreview ghost={ghost} onAccept={() => acceptGhost(ghost)} />}
     </div>
+  );
+}
+
+function FmtBtn({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      className={`min-w-[24px] h-6 px-1.5 rounded text-[11px] font-medium transition-colors ${
+        active ? "bg-black text-white" : "text-black/70 hover:bg-black/5"
+      }`}
+      onMouseDown={(e) => {
+        // 阻止触发编辑器 blur（blur 后选区没了，toggle 无效）
+        e.preventDefault();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
