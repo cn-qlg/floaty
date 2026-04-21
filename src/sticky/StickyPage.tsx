@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Editor } from "../editor/Editor";
 import { useStickyData } from "./useStickyData";
 import { SettingsPopover } from "./SettingsPopover";
@@ -72,6 +72,51 @@ export function StickyPage({ stickyId }: StickyPageProps) {
       setConfirmDelete(false);
     }
   };
+
+  // 便签内快捷键：⌘W / ⌘⇧P / ⌘, / ⌘⌫
+  // 只在 sticky 可用时挂 listener；confirmDelete/setSettingsOpen 通过闭包拿最新 React state。
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      // ⌘W：隐藏当前便签（同 ✕）
+      if (key === "w" && !e.shiftKey) {
+        e.preventDefault();
+        ipc.hideSticky(stickyId).catch((err) => console.error("[floaty] ⌘W:", err));
+        return;
+      }
+      // ⌘⇧P：切换 pin
+      if (key === "p" && e.shiftKey) {
+        e.preventDefault();
+        (async () => {
+          try {
+            await ipc.togglePin(stickyId);
+            const fresh = await ipc.getSticky(stickyId);
+            setSticky(fresh);
+          } catch (err) {
+            console.error("[floaty] ⌘⇧P:", err);
+          }
+        })();
+        return;
+      }
+      // ⌘,：打开/关闭设置 popover
+      if (key === ",") {
+        e.preventDefault();
+        setSettingsOpen((v) => !v);
+        return;
+      }
+      // ⌘⌫：删除便签（弹确认）
+      if (key === "backspace") {
+        e.preventDefault();
+        setSettingsOpen(false);
+        setConfirmDelete(true);
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [stickyId, setSticky]);
 
   return (
     <div

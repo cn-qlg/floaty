@@ -13,6 +13,7 @@
     "core:window:allow-set-always-on-top",
     "opener:default",
     "notification:default",
-    "autostart:default"
+    "autostart:default",
+    "global-shortcut:default"
   ]
 }
