@@ -199,6 +199,11 @@ fn position_visible_on_any_monitor(app: &AppHandle, x: i64, y: i64, w: i64, h: i
         Ok(m) => m,
         Err(_) => return true, // 无法取显示器信息时，保守放行
     };
+    // 早期启动时 available_monitors() 可能返回空（系统还没枚举完）→ 保守放行，
+    // 避免把合法位置误判为 offscreen 导致用户的便签被重置到默认位置。
+    if monitors.is_empty() {
+        return true;
+    }
     for mon in monitors {
         let scale = mon.scale_factor();
         let pos = mon.position();
