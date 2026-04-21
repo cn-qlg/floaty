@@ -1,5 +1,5 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import { BubbleMenu } from "@tiptap/react/menus";
+import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import type { Editor as TipTapEditorT } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
 import { Extension } from "@tiptap/core";
@@ -249,6 +249,53 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   return (
     <div ref={containerRef} className="relative">
       <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none" />
+      {editor && (
+        <FloatingMenu
+          editor={editor}
+          shouldShow={({ editor, state }: { editor: TipTapEditorT; state: EditorState }) => {
+            const { $from, empty } = state.selection;
+            if (!empty) return false;
+            // 光标所在块必须是空段落（不是 task/list/heading/etc）
+            const parent = $from.parent;
+            if (parent.type.name !== "paragraph") return false;
+            if (parent.textContent.length > 0) return false;
+            return editor.isEditable;
+          }}
+        >
+          <div className="flex items-center gap-0.5 rounded-md shadow-lg border border-black/10 bg-white/95 backdrop-blur-sm px-1 py-0.5 text-[11px]">
+            <FmtBtn
+              onClick={() => editor.chain().focus().toggleTaskList().run()}
+              title="待办清单"
+            >
+              ☐ 待办
+            </FmtBtn>
+            <FmtBtn
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              title="无序列表"
+            >
+              • 列表
+            </FmtBtn>
+            <FmtBtn
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              title="有序列表"
+            >
+              1. 有序
+            </FmtBtn>
+            <FmtBtn
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              title="一级标题"
+            >
+              H1
+            </FmtBtn>
+            <FmtBtn
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              title="引用"
+            >
+              ❝
+            </FmtBtn>
+          </div>
+        </FloatingMenu>
+      )}
       {editor && (
         <BubbleMenu
           editor={editor}
