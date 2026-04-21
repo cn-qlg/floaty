@@ -119,7 +119,12 @@ pub async fn get_setting(db: State<'_, Db>, key: String) -> AppResult<Option<Str
 }
 
 #[tauri::command]
-pub async fn set_setting(db: State<'_, Db>, key: String, value: String) -> AppResult<()> {
+pub async fn set_setting(
+    app: AppHandle,
+    db: State<'_, Db>,
+    key: String,
+    value: String,
+) -> AppResult<()> {
     sqlx::query(
         "INSERT INTO settings (key, value) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -128,6 +133,8 @@ pub async fn set_setting(db: State<'_, Db>, key: String, value: String) -> AppRe
     .bind(&value)
     .execute(db.inner())
     .await?;
+    // 广播给所有 webview，editor / preferences 可以实时响应
+    let _ = tauri::Emitter::emit(&app, "settings-changed", &key);
     Ok(())
 }
 

@@ -1,5 +1,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Editor as TipTapEditorT } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
 import { Extension } from "@tiptap/core";
@@ -80,6 +82,23 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   const [ghost, setGhost] = useState<GhostState | null>(null);
   const ghostRef = useRef<GhostState | null>(null);
   ghostRef.current = ghost;
+  const [toolbarsEnabled, setToolbarsEnabled] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const v = await invoke<string | null>("get_setting", {
+        key: "format_toolbars_enabled",
+      });
+      setToolbarsEnabled(v !== "false");
+    };
+    load();
+    const unlistenPromise = listen<string>("settings-changed", (e) => {
+      if (e.payload === "format_toolbars_enabled") load();
+    });
+    return () => {
+      unlistenPromise.then((fn) => fn());
+    };
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -249,7 +268,7 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   return (
     <div ref={containerRef} className="relative">
       <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none" />
-      {editor && (
+      {editor && toolbarsEnabled && (
         <FloatingMenu
           editor={editor}
           shouldShow={({ editor, state }: { editor: TipTapEditorT; state: EditorState }) => {
@@ -296,7 +315,7 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
           </div>
         </FloatingMenu>
       )}
-      {editor && (
+      {editor && toolbarsEnabled && (
         <BubbleMenu
           editor={editor}
           shouldShow={({ editor, state }: { editor: TipTapEditorT; state: EditorState }) => {

@@ -15,20 +15,23 @@ export function PreferencesPage() {
   const [dataDir, setDataDir] = useState<string>("");
   const [autostart, setAutostart] = useState<boolean>(false);
   const [globalEnabled, setGlobalEnabled] = useState<boolean>(true);
+  const [toolbarsEnabled, setToolbarsEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, d, a, g] = await Promise.all([
+        const [s, d, a, g, t] = await Promise.all([
           invoke<Stats>("get_stats"),
           invoke<string>("get_data_dir"),
           isEnabled(),
           invoke<string | null>("get_setting", { key: "global_shortcut_enabled" }),
+          invoke<string | null>("get_setting", { key: "format_toolbars_enabled" }),
         ]);
         setStats(s);
         setDataDir(d);
         setAutostart(a);
         setGlobalEnabled(g !== "false");
+        setToolbarsEnabled(t !== "false");
       } catch (err) {
         console.error("[floaty] preferences load failed:", err);
       }
@@ -44,6 +47,18 @@ export function PreferencesPage() {
       setGlobalEnabled(next);
     } catch (err) {
       console.error("[floaty] toggle global shortcut failed:", err);
+    }
+  };
+
+  const toggleToolbars = async (next: boolean) => {
+    try {
+      await invoke("set_setting", {
+        key: "format_toolbars_enabled",
+        value: next ? "true" : "false",
+      });
+      setToolbarsEnabled(next);
+    } catch (err) {
+      console.error("[floaty] toggle toolbars failed:", err);
     }
   };
 
@@ -115,6 +130,20 @@ export function PreferencesPage() {
               onChange={(e) => toggleAutostart(e.target.checked)}
             />
             <span>开机自动启动 Floaty（macOS LaunchAgent）</span>
+          </label>
+        </section>
+
+        <section>
+          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">编辑器</div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={toolbarsEnabled}
+              onChange={(e) => toggleToolbars(e.target.checked)}
+            />
+            <span>
+              显示浮动格式工具栏（选中文字的粗斜/链接 + 空行的待办/列表/标题按钮）
+            </span>
           </label>
         </section>
 
