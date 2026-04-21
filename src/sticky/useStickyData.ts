@@ -17,7 +17,9 @@ export function useStickyData(stickyId: string) {
         setSticky(s);
         const items = await ipc.listItems(s.id);
         const combined = items.map((i) => i.content_md).join("\n");
-        setMarkdown(combined || "- [ ] ");
+        // 空便签默认空段落（不是 task list），这样 '#' / '## ' 等 heading
+        // 输入规则能正常触发；用户想做 todo 就打 '- [ ] '
+        setMarkdown(combined || "");
         itemIdRef.current = items[0]?.id ?? null;
         setLoaded(true);
       } catch (err) {

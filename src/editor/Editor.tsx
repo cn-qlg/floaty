@@ -1,4 +1,5 @@
 import { useEditor, EditorContent } from "@tiptap/react";
+import { markInputRule } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -9,6 +10,19 @@ import { DueTime, refreshAllPills } from "./DueTime";
 import { DueTimePicker } from "./DueTimePicker";
 import { parseTimeHint, type TimeHint } from "./timeHints";
 import { tierLabel, tierOf } from "../theme/urgency";
+
+/** 加 markdown link 输入规则：键入 `[text](url) ` 自动变成带 link mark 的 "text" */
+const MarkdownLink = Link.extend({
+  addInputRules() {
+    return [
+      markInputRule({
+        find: /\[([^\]]+)\]\((\S+?)\)$/,
+        type: this.type,
+        getAttributes: (match) => ({ href: match[2] }),
+      }),
+    ];
+  },
+});
 
 interface EditorProps {
   initialMarkdown: string;
@@ -42,7 +56,7 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       TaskList,
       TaskItem.configure({ nested: false }),
-      Link.configure({ openOnClick: false }),
+      MarkdownLink.configure({ openOnClick: false }),
       DueTime.configure({
         onEdit: (pos: number, iso: string) => {
           const el = containerRef.current?.querySelector<HTMLElement>(
