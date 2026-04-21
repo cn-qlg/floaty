@@ -46,6 +46,10 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
         .build()
         .map_err(|e| AppError::Other(format!("window build failed: {}", e)))?;
 
+    // 确保新建窗口立刻可见 + 获得焦点（否则有时被其它 app 盖住）
+    let _ = window.show();
+    let _ = window.set_focus();
+
     attach_geometry_listener(&window, sticky.id.clone())?;
     Ok(window)
 }
