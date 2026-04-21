@@ -22,13 +22,19 @@ pub fn run() {
                 .expect("register global shortcut")
                 .with_handler(|app, shortcut, event| {
                     use tauri_plugin_global_shortcut::ShortcutState;
+                    let sc_str = shortcut.into_string();
+                    eprintln!(
+                        "[floaty] global shortcut fired: '{}' state={:?}",
+                        sc_str,
+                        event.state()
+                    );
                     if event.state() != ShortcutState::Pressed {
                         return;
                     }
-                    if shortcut.into_string().to_lowercase().contains("shift+n") {
+                    // 实际字符串是 'shift+super+KeyN'，只匹配 keyN 即可
+                    if sc_str.to_lowercase().contains("keyn") {
                         let handle = app.clone();
                         tauri::async_runtime::spawn(async move {
-                            // 读 settings：global_shortcut_enabled（默认 "true"）
                             let db = handle.state::<crate::db::Db>();
                             let enabled: Option<(String,)> =
                                 sqlx::query_as("SELECT value FROM settings WHERE key = 'global_shortcut_enabled'")
@@ -36,12 +42,14 @@ pub fn run() {
                                     .await
                                     .unwrap_or(None);
                             if enabled.as_ref().map(|(v,)| v.as_str()) == Some("false") {
+                                eprintln!("[floaty] global shortcut disabled via settings, ignoring");
                                 return;
                             }
                             match crate::db::stickies::create_default(&db).await {
                                 Ok(sticky) => {
                                     let _ = crate::windows::open(&handle, &sticky).await;
                                     crate::tray::refresh_menu(&handle).await;
+                                    eprintln!("[floaty] global ⌘⇧N: new sticky {}", &sticky.id[..8]);
                                 }
                                 Err(e) => eprintln!("[floaty] global ⌘⇧N create failed: {}", e),
                             }
@@ -73,6 +81,11 @@ pub fn run() {
             });
 
             tray::init(app.handle()).expect("tray init");
+
+            // 确认全局快捷键注册状态
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            let registered = app.global_shortcut().is_registered("CmdOrCtrl+Shift+N");
+            eprintln!("[floaty] global shortcut 'CmdOrCtrl+Shift+N' registered: {}", registered);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
