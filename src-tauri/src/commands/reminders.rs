@@ -13,8 +13,15 @@ pub async fn sync_reminders(
     sticky_id: String,
     entries: Vec<SyncEntry>,
 ) -> AppResult<()> {
+    let now = chrono::Utc::now().timestamp_millis();
     db::reminders::delete_at_due_for_sticky(&db, &sticky_id).await?;
     for e in entries {
+        // 跳过已过期的条目：这是用户编辑时的 reconcile，不应把历史 due 重新当作"待触发"
+        // 启动时的"漏触发兜底"由 scheduler 的 list_pending + fire_at <= now 分支处理，
+        // 那里只在 app 冷启动时跑一次。
+        if e.fire_at <= now {
+            continue;
+        }
         db::reminders::insert(
             &db,
             ReminderInput {
