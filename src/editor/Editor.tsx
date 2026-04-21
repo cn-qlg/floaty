@@ -82,18 +82,21 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   const [ghost, setGhost] = useState<GhostState | null>(null);
   const ghostRef = useRef<GhostState | null>(null);
   ghostRef.current = ghost;
-  const [toolbarsEnabled, setToolbarsEnabled] = useState(true);
+  const [bubbleEnabled, setBubbleEnabled] = useState(true);
+  const [floatingEnabled, setFloatingEnabled] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const v = await invoke<string | null>("get_setting", {
-        key: "format_toolbars_enabled",
-      });
-      setToolbarsEnabled(v !== "false");
+      const [b, f] = await Promise.all([
+        invoke<string | null>("get_setting", { key: "bubble_menu_enabled" }),
+        invoke<string | null>("get_setting", { key: "floating_menu_enabled" }),
+      ]);
+      setBubbleEnabled(b !== "false");
+      setFloatingEnabled(f !== "false");
     };
     load();
     const unlistenPromise = listen<string>("settings-changed", (e) => {
-      if (e.payload === "format_toolbars_enabled") load();
+      if (e.payload === "bubble_menu_enabled" || e.payload === "floating_menu_enabled") load();
     });
     return () => {
       unlistenPromise.then((fn) => fn());
@@ -268,7 +271,7 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
   return (
     <div ref={containerRef} className="relative">
       <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none" />
-      {editor && toolbarsEnabled && (
+      {editor && floatingEnabled && (
         <FloatingMenu
           editor={editor}
           shouldShow={({ editor, state }: { editor: TipTapEditorT; state: EditorState }) => {
@@ -315,7 +318,7 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
           </div>
         </FloatingMenu>
       )}
-      {editor && toolbarsEnabled && (
+      {editor && bubbleEnabled && (
         <BubbleMenu
           editor={editor}
           shouldShow={({ editor, state }: { editor: TipTapEditorT; state: EditorState }) => {
@@ -411,11 +414,13 @@ function FmtBtn({
       type="button"
       title={title}
       className={`min-w-[24px] h-6 px-1.5 rounded text-[11px] font-medium transition-colors ${
-        active ? "bg-black text-white" : "text-black/70 hover:bg-black/5"
+        active ? "bg-black text-white" : "text-black/70 hover:bg-black/5 active:bg-black/10"
       }`}
-      onMouseDown={(e) => {
-        // 阻止触发编辑器 blur（blur 后选区没了，toggle 无效）
+      // 只 preventDefault，防止编辑器失焦丢失选区
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         onClick();
       }}
     >

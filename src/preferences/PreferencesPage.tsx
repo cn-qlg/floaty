@@ -15,23 +15,26 @@ export function PreferencesPage() {
   const [dataDir, setDataDir] = useState<string>("");
   const [autostart, setAutostart] = useState<boolean>(false);
   const [globalEnabled, setGlobalEnabled] = useState<boolean>(true);
-  const [toolbarsEnabled, setToolbarsEnabled] = useState<boolean>(true);
+  const [bubbleEnabled, setBubbleEnabled] = useState<boolean>(true);
+  const [floatingEnabled, setFloatingEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, d, a, g, t] = await Promise.all([
+        const [s, d, a, g, bm, fm] = await Promise.all([
           invoke<Stats>("get_stats"),
           invoke<string>("get_data_dir"),
           isEnabled(),
           invoke<string | null>("get_setting", { key: "global_shortcut_enabled" }),
-          invoke<string | null>("get_setting", { key: "format_toolbars_enabled" }),
+          invoke<string | null>("get_setting", { key: "bubble_menu_enabled" }),
+          invoke<string | null>("get_setting", { key: "floating_menu_enabled" }),
         ]);
         setStats(s);
         setDataDir(d);
         setAutostart(a);
         setGlobalEnabled(g !== "false");
-        setToolbarsEnabled(t !== "false");
+        setBubbleEnabled(bm !== "false");
+        setFloatingEnabled(fm !== "false");
       } catch (err) {
         console.error("[floaty] preferences load failed:", err);
       }
@@ -50,15 +53,21 @@ export function PreferencesPage() {
     }
   };
 
-  const toggleToolbars = async (next: boolean) => {
+  const toggleBubble = async (next: boolean) => {
     try {
-      await invoke("set_setting", {
-        key: "format_toolbars_enabled",
-        value: next ? "true" : "false",
-      });
-      setToolbarsEnabled(next);
+      await invoke("set_setting", { key: "bubble_menu_enabled", value: next ? "true" : "false" });
+      setBubbleEnabled(next);
     } catch (err) {
-      console.error("[floaty] toggle toolbars failed:", err);
+      console.error("[floaty] toggle bubble failed:", err);
+    }
+  };
+
+  const toggleFloating = async (next: boolean) => {
+    try {
+      await invoke("set_setting", { key: "floating_menu_enabled", value: next ? "true" : "false" });
+      setFloatingEnabled(next);
+    } catch (err) {
+      console.error("[floaty] toggle floating failed:", err);
     }
   };
 
@@ -135,15 +144,21 @@ export function PreferencesPage() {
 
         <section>
           <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">编辑器</div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer mb-1.5">
+            <input
+              type="checkbox"
+              checked={bubbleEnabled}
+              onChange={(e) => toggleBubble(e.target.checked)}
+            />
+            <span>选中文字时显示格式工具栏（粗斜 / 删除线 / 行内码 / 标题 / 链接）</span>
+          </label>
           <label className="flex items-center gap-2 text-xs cursor-pointer">
             <input
               type="checkbox"
-              checked={toolbarsEnabled}
-              onChange={(e) => toggleToolbars(e.target.checked)}
+              checked={floatingEnabled}
+              onChange={(e) => toggleFloating(e.target.checked)}
             />
-            <span>
-              显示浮动格式工具栏（选中文字的粗斜/链接 + 空行的待办/列表/标题按钮）
-            </span>
+            <span>空行时显示插入工具栏（待办 / 列表 / 有序 / 标题 / 引用）</span>
           </label>
         </section>
 
