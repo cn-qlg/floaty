@@ -16,23 +16,28 @@ import { tierLabel, tierOf } from "../theme/urgency";
  * 不用 markInputRule，因为那个只认"最后一个 capture 作为展示文本"，而我们需要
  * 第一个 capture 是文字、第二个是 URL。手写 InputRule 精确控制。
  */
-const linkInputRule = new InputRule({
-  find: /\[([^\]]+)\]\((\S+?)\)$/,
-  handler: ({ state, range, match }) => {
-    const text = match[1];
-    const url = match[2];
-    if (!text || !url) return null;
-    const linkMark = state.schema.marks.link.create({ href: url });
-    const tr = state.tr.replaceRangeWith(range.from, range.to, state.schema.text(text, [linkMark]));
-    // 光标放在插入的链接之后，让用户能继续打字且不再处于 link 标记内
-    tr.removeStoredMark(state.schema.marks.link);
-    return null;
-  },
-});
-
 const MarkdownLink = Link.extend({
   addInputRules() {
-    return [linkInputRule];
+    return [
+      new InputRule({
+        find: /\[([^\]]+)\]\(([^)]+)\)$/,
+        handler: ({ state, range, match, chain }) => {
+          const [, text, url] = match;
+          console.log("[floaty] link rule fired:", { text, url, range });
+          if (!text || !url) return null;
+          // 用 chain() 而不是直接改 state.tr —— 更符合 TipTap 约定
+          chain()
+            .deleteRange(range)
+            .insertContent({
+              type: "text",
+              text,
+              marks: [{ type: "link", attrs: { href: url } }],
+            })
+            .unsetMark("link")
+            .run();
+        },
+      }),
+    ];
   },
 });
 
