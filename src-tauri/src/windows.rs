@@ -156,9 +156,29 @@ pub async fn show_all(app: &AppHandle, db: &Db) -> AppResult<usize> {
 /// 有便签但都 hidden=1 时，只启动 tray，让用户通过菜单栏恢复，避免每次重启都冒出空白新便签。
 pub async fn restore_on_startup(app: &AppHandle, db: &Db) -> AppResult<()> {
     let visible = db::stickies::list_visible(db).await?;
+    eprintln!("[floaty] restore_on_startup: found {} visible stickies", visible.len());
     if !visible.is_empty() {
         for s in visible {
-            open(app, &s).await?;
+            eprintln!(
+                "[floaty] restore: opening sticky {} at ({:?},{:?}) {}x{} pinned={}",
+                &s.id[..8],
+                s.x,
+                s.y,
+                s.w,
+                s.h,
+                s.pinned
+            );
+            match open(app, &s).await {
+                Ok(w) => {
+                    let pos = w.outer_position().ok();
+                    let size = w.inner_size().ok();
+                    eprintln!(
+                        "[floaty] restore: opened → actual pos={:?} size={:?}",
+                        pos, size
+                    );
+                }
+                Err(e) => eprintln!("[floaty] restore: open failed for {}: {}", &s.id[..8], e),
+            }
         }
         return Ok(());
     }
