@@ -71,6 +71,13 @@ pub async fn new_sticky_window(app: AppHandle, db: State<'_, Db>) -> AppResult<S
 }
 
 #[tauri::command]
+pub async fn open_welcome(app: AppHandle, db: State<'_, Db>) -> AppResult<String> {
+    let sticky = windows::create_welcome(&app, &db).await?;
+    crate::tray::refresh_menu(&app).await;
+    Ok(sticky.id)
+}
+
+#[tauri::command]
 pub async fn open_preferences(app: AppHandle) -> AppResult<()> {
     use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
     if let Some(w) = app.get_webview_window("preferences") {

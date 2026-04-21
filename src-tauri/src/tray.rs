@@ -112,6 +112,9 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     )?;
     menu.append(&new_item)?;
 
+    let help = MenuItem::with_id(app, "welcome", "📖 上手指南", true, None::<&str>)?;
+    menu.append(&help)?;
+
     let prefs = MenuItem::with_id(app, "preferences", "⚙️ 偏好设置", true, None::<&str>)?;
     menu.append(&prefs)?;
 
@@ -136,6 +139,17 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
             if let Err(e) = crate::commands::windows::open_preferences(handle).await {
                 eprintln!("[floaty] open_preferences failed: {}", e);
             }
+        });
+        return;
+    }
+    if id == "welcome" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let db = handle.state::<Db>();
+            if let Err(e) = crate::windows::create_welcome(&handle, &db).await {
+                eprintln!("[floaty] welcome open failed: {}", e);
+            }
+            refresh_menu(&handle).await;
         });
         return;
     }

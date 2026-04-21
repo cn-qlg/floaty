@@ -102,6 +102,14 @@ export function PreferencesPage() {
     }
   };
 
+  const openWelcome = async () => {
+    try {
+      await invoke("open_welcome");
+    } catch (err) {
+      console.error("[floaty] open welcome failed:", err);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-white text-sm" style={{ color: "#333" }}>
       <div className="px-4 py-3 border-b border-black/5">
@@ -191,12 +199,18 @@ export function PreferencesPage() {
 
         <section>
           <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">操作</div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               className="text-xs px-3 h-7 rounded border border-black/10 hover:bg-black/5"
               onClick={newSticky}
             >
               ＋ 新建便签
+            </button>
+            <button
+              className="text-xs px-3 h-7 rounded border border-black/10 hover:bg-black/5"
+              onClick={openWelcome}
+            >
+              📖 打开上手指南
             </button>
           </div>
         </section>

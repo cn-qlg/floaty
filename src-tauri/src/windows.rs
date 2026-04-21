@@ -227,22 +227,28 @@ pub async fn restore_on_startup(app: &AppHandle, db: &Db) -> AppResult<()> {
     }
     let all = db::stickies::list_all(db).await?;
     if all.is_empty() {
-        let fresh = db::stickies::create_default(db).await?;
-        // 首次安装：塞一张欢迎便签，内容直接渲染给用户看，不需要懂 markdown
-        let _ = db::items::upsert(
-            db,
-            db::items::ItemUpsert {
-                id: None,
-                sticky_id: fresh.id.clone(),
-                content_md: WELCOME_MARKDOWN.to_string(),
-                due_at: None,
-                sort_order: 0,
-            },
-        )
-        .await;
-        open(app, &fresh).await?;
+        create_welcome(app, db).await?;
     }
     Ok(())
+}
+
+/// 新建一张欢迎便签，塞入 WELCOME_MARKDOWN 内容并打开。
+/// 可从菜单栏 / 偏好设置按钮触发，用于老用户首次看到上手指南。
+pub async fn create_welcome(app: &AppHandle, db: &Db) -> AppResult<Sticky> {
+    let fresh = db::stickies::create_default(db).await?;
+    let _ = db::items::upsert(
+        db,
+        db::items::ItemUpsert {
+            id: None,
+            sticky_id: fresh.id.clone(),
+            content_md: WELCOME_MARKDOWN.to_string(),
+            due_at: None,
+            sort_order: 0,
+        },
+    )
+    .await;
+    open(app, &fresh).await?;
+    Ok(fresh)
 }
 
 #[cfg(target_os = "macos")]
