@@ -125,6 +125,7 @@ pub async fn set_setting(
     key: String,
     value: String,
 ) -> AppResult<()> {
+    eprintln!("[floaty] set_setting: key={} value={}", key, value);
     sqlx::query(
         "INSERT INTO settings (key, value) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -132,9 +133,15 @@ pub async fn set_setting(
     .bind(&key)
     .bind(&value)
     .execute(db.inner())
-    .await?;
-    // 广播给所有 webview，editor / preferences 可以实时响应
-    let _ = tauri::Emitter::emit(&app, "settings-changed", &key);
+    .await
+    .map_err(|e| {
+        eprintln!("[floaty] set_setting DB write failed: {}", e);
+        e
+    })?;
+    use tauri::Emitter;
+    if let Err(e) = app.emit("settings-changed", &key) {
+        eprintln!("[floaty] set_setting emit failed (non-fatal): {}", e);
+    }
     Ok(())
 }
 
