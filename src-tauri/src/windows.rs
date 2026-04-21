@@ -1,5 +1,8 @@
 use crate::db::{self, stickies::Sticky, Db};
 use crate::error::{AppError, AppResult};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 /// 标签前缀 + sticky id 构成窗口 label
@@ -120,6 +123,49 @@ pub async fn toggle_pin(app: &AppHandle, sticky_id: &str, db: &Db) -> AppResult<
             .map_err(|e| AppError::Other(format!("set_always_on_top: {}", e)))?;
     }
     Ok(next == 1)
+}
+
+/// 一键排版：把所有可见便签按网格重新摆放（320x420 + 40px 间距，4 列 wrap）。
+/// 隐藏的便签不动，等显示时再排。
+pub async fn tile_all(app: &AppHandle, db: &Db) -> AppResult<usize> {
+    let visible = db::stickies::list_visible(db).await?;
+    let start_x = 50_i64;
+    let start_y = 50_i64;
+    let cell_w = 320_i64 + 40;
+    let cell_h = 420_i64 + 40;
+    let cols = 4_usize;
+    let mut count = 0;
+    for (i, s) in visible.iter().enumerate() {
+        let col = (i % cols) as i64;
+        let row = (i / cols) as i64;
+        let x = start_x + col * cell_w;
+        let y = start_y + row * cell_h;
+        // 1) 写回 DB
+        db::stickies::update(
+            db,
+            &s.id,
+            db::stickies::StickyPatch {
+                x: Some(x),
+                y: Some(y),
+                w: Some(320),
+                h: Some(420),
+                ..Default::default()
+            },
+        )
+        .await?;
+        // 2) 立即应用到运行中的窗口
+        if let Some(w) = app.get_webview_window(&label(&s.id)) {
+            let _ = w.set_position(tauri::LogicalPosition::new(x as f64, y as f64));
+            let _ = w.set_size(tauri::LogicalSize::new(320.0, 420.0));
+            let _ = w.show();
+            let _ = w.set_focus();
+        } else {
+            let refreshed = db::stickies::get(db, &s.id).await?;
+            let _ = open(app, &refreshed).await;
+        }
+        count += 1;
+    }
+    Ok(count)
 }
 
 /// "Bring all to front"：把所有便签都推到桌面最前。
@@ -248,6 +294,10 @@ fn position_visible_on_any_monitor(app: &AppHandle, x: i64, y: i64, w: i64, h: i
 fn attach_geometry_listener(window: &WebviewWindow, sticky_id: String) -> AppResult<()> {
     let app = window.app_handle().clone();
     let label = window.label().to_string();
+    // Debounce：每次事件递增 seq；200ms 后若 seq 仍是最新则 commit。
+    // 解决 macOS 拖动/resize 连续 Moved → 多个 async task 乱序完成 → 旧值覆盖新值的
+    // race（症状：关掉便签再恢复后位置"乱跳"）。
+    let seq = Arc::new(AtomicU64::new(0));
     window.on_window_event(move |event| {
         use tauri::WindowEvent;
         let Some(win) = app.get_webview_window(&label) else { return; };
@@ -271,14 +321,20 @@ fn attach_geometry_listener(window: &WebviewWindow, sticky_id: String) -> AppRes
             }
             _ => return,
         };
-        // Guard: hide() 会把窗口挪到 (-32000,-32000) 屏幕外；这种"伪隐藏"的
-        // 移动事件不能覆盖真实位置。用 sanitize_position 统一判定。
+        // -32000 的"伪隐藏"位置：直接忽略
         if sanitize_position(x, y).is_none() {
             return;
         }
+        let my_seq = seq.fetch_add(1, Ordering::SeqCst) + 1;
+        let seq_shared = seq.clone();
         let sticky_id = sticky_id.clone();
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            // 200ms 内如果有更新的事件进来，seq_shared > my_seq，就跳过这次
+            if seq_shared.load(Ordering::SeqCst) != my_seq {
+                return;
+            }
             if let Some(db) = app.try_state::<Db>() {
                 let _ = db::stickies::update(
                     &db,

@@ -93,6 +93,16 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     )?;
     menu.append(&show_all_item)?;
 
+    let visible_count = all.len() - hidden_count;
+    let tile_item = MenuItem::with_id(
+        app,
+        "tile-all",
+        format!("一键排版（{} 张可见）", visible_count),
+        visible_count > 0,
+        None::<&str>,
+    )?;
+    menu.append(&tile_item)?;
+
     let new_item = MenuItem::with_id(
         app,
         "new-sticky",
@@ -149,6 +159,15 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
             let db = handle.state::<Db>();
             if let Err(e) = crate::windows::show_all(&handle, &db).await {
                 eprintln!("[floaty] tray show-all failed: {}", e);
+            }
+            refresh_menu(&handle).await;
+        });
+    } else if id == "tile-all" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let db = handle.state::<Db>();
+            if let Err(e) = crate::windows::tile_all(&handle, &db).await {
+                eprintln!("[floaty] tray tile-all failed: {}", e);
             }
             refresh_menu(&handle).await;
         });

@@ -16,14 +16,40 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        // 全局快捷键暂时禁用，疑似影响窗口可见性。后续用 app.global_shortcut().register() 在 setup 里注册
-        // .plugin(
-        //     tauri_plugin_global_shortcut::Builder::new()
-        //         .with_shortcuts(["CmdOrCtrl+Shift+N"])
-        //         .expect("register shortcut")
-        //         .with_handler(...)
-        //         .build(),
-        // )
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcuts(["CmdOrCtrl+Shift+N"])
+                .expect("register global shortcut")
+                .with_handler(|app, shortcut, event| {
+                    use tauri_plugin_global_shortcut::ShortcutState;
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    if shortcut.into_string().to_lowercase().contains("shift+n") {
+                        let handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            // 读 settings：global_shortcut_enabled（默认 "true"）
+                            let db = handle.state::<crate::db::Db>();
+                            let enabled: Option<(String,)> =
+                                sqlx::query_as("SELECT value FROM settings WHERE key = 'global_shortcut_enabled'")
+                                    .fetch_optional(db.inner())
+                                    .await
+                                    .unwrap_or(None);
+                            if enabled.as_ref().map(|(v,)| v.as_str()) == Some("false") {
+                                return;
+                            }
+                            match crate::db::stickies::create_default(&db).await {
+                                Ok(sticky) => {
+                                    let _ = crate::windows::open(&handle, &sticky).await;
+                                    crate::tray::refresh_menu(&handle).await;
+                                }
+                                Err(e) => eprintln!("[floaty] global ⌘⇧N create failed: {}", e),
+                            }
+                        });
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -66,10 +92,13 @@ pub fn run() {
             commands::windows::show_sticky,
             commands::windows::toggle_pin,
             commands::windows::show_all_stickies,
+            commands::windows::tile_all_stickies,
             commands::windows::new_sticky_window,
             commands::windows::open_preferences,
             commands::windows::get_stats,
             commands::windows::get_data_dir,
+            commands::windows::get_setting,
+            commands::windows::set_setting,
             commands::reminders::sync_reminders,
             commands::reminders::snooze_reminder,
         ])

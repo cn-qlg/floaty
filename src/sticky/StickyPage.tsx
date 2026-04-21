@@ -27,6 +27,12 @@ export function StickyPage({ stickyId }: StickyPageProps) {
         ipc.hideSticky(stickyId).catch((err) => console.error("[floaty] ⌘W:", err));
         return;
       }
+      // ⌘N：在当前便签聚焦时新建一张
+      if (key === "n" && !e.shiftKey) {
+        e.preventDefault();
+        ipc.newStickyWindow().catch((err) => console.error("[floaty] ⌘N:", err));
+        return;
+      }
       if (key === "p" && e.shiftKey) {
         e.preventDefault();
         (async () => {

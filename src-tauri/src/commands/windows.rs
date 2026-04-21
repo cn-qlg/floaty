@@ -56,6 +56,13 @@ pub async fn show_all_stickies(app: AppHandle, db: State<'_, Db>) -> AppResult<u
 }
 
 #[tauri::command]
+pub async fn tile_all_stickies(app: AppHandle, db: State<'_, Db>) -> AppResult<usize> {
+    let n = windows::tile_all(&app, &db).await?;
+    crate::tray::refresh_menu(&app).await;
+    Ok(n)
+}
+
+#[tauri::command]
 pub async fn new_sticky_window(app: AppHandle, db: State<'_, Db>) -> AppResult<String> {
     let sticky = crate::db::stickies::create_default(&db).await?;
     windows::open(&app, &sticky).await?;
@@ -100,6 +107,28 @@ pub async fn get_stats(db: State<'_, Db>) -> AppResult<StatsPayload> {
         items: item_count.0,
         pending_reminders: reminder_count.0,
     })
+}
+
+#[tauri::command]
+pub async fn get_setting(db: State<'_, Db>, key: String) -> AppResult<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM settings WHERE key = ?")
+        .bind(&key)
+        .fetch_optional(db.inner())
+        .await?;
+    Ok(row.map(|r| r.0))
+}
+
+#[tauri::command]
+pub async fn set_setting(db: State<'_, Db>, key: String, value: String) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO settings (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    )
+    .bind(&key)
+    .bind(&value)
+    .execute(db.inner())
+    .await?;
+    Ok(())
 }
 
 #[tauri::command]

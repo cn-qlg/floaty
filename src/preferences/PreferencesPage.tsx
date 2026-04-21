@@ -13,23 +13,38 @@ export function PreferencesPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [dataDir, setDataDir] = useState<string>("");
   const [autostart, setAutostart] = useState<boolean>(false);
+  const [globalEnabled, setGlobalEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, d, a] = await Promise.all([
+        const [s, d, a, g] = await Promise.all([
           invoke<Stats>("get_stats"),
           invoke<string>("get_data_dir"),
           isEnabled(),
+          invoke<string | null>("get_setting", { key: "global_shortcut_enabled" }),
         ]);
         setStats(s);
         setDataDir(d);
         setAutostart(a);
+        setGlobalEnabled(g !== "false");
       } catch (err) {
         console.error("[floaty] preferences load failed:", err);
       }
     })();
   }, []);
+
+  const toggleGlobal = async (next: boolean) => {
+    try {
+      await invoke("set_setting", {
+        key: "global_shortcut_enabled",
+        value: next ? "true" : "false",
+      });
+      setGlobalEnabled(next);
+    } catch (err) {
+      console.error("[floaty] toggle global shortcut failed:", err);
+    }
+  };
 
   const toggleAutostart = async (next: boolean) => {
     try {
@@ -103,6 +118,31 @@ export function PreferencesPage() {
         </section>
 
         <section>
+          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">快捷键</div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer mb-2">
+            <input
+              type="checkbox"
+              checked={globalEnabled}
+              onChange={(e) => toggleGlobal(e.target.checked)}
+            />
+            <span>启用全局 <Kbd>⌘⇧N</Kbd>（任何 app 下都能快速新建便签）</span>
+          </label>
+          <div className="text-[11px] space-y-1 opacity-85">
+            <Row k="⌘⇧N" d="全局：新建便签" />
+            <Row k="⌘N" d="便签聚焦时：新建便签" />
+            <Row k="⌘W" d="隐藏当前便签（不删除）" />
+            <Row k="⌘⇧P" d="切换置顶" />
+            <Row k="⌘," d="打开/关闭外观设置" />
+            <Row k="⌘⌫" d="删除当前便签（带确认）" />
+            <Row k="@" d="编辑区：打开时间选择器" />
+            <Row k="Tab" d="编辑区：接受时间 ghost 预览" />
+          </div>
+          <div className="text-[10px] opacity-50 mt-2">
+            快捷键自定义功能后续版本提供。
+          </div>
+        </section>
+
+        <section>
           <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">操作</div>
           <div className="flex gap-2">
             <button
@@ -129,6 +169,23 @@ function Stat({ label, value }: { label: string; value: number | string }) {
     <div className="rounded border border-black/10 p-2 text-center">
       <div className="text-[10px] opacity-60">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="font-mono text-[10px] px-1.5 py-[1px] rounded border border-black/15 bg-black/5 mx-0.5">
+      {children}
+    </kbd>
+  );
+}
+
+function Row({ k, d }: { k: string; d: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span>{d}</span>
+      <Kbd>{k}</Kbd>
     </div>
   );
 }
