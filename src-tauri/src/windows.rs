@@ -38,7 +38,18 @@ pub async fn open(app: &AppHandle, sticky: &Sticky) -> AppResult<WebviewWindow> 
 
     if let (Some(x), Some(y)) = (sticky.x, sticky.y) {
         if let Some((sx, sy)) = sanitize_position(x, y) {
-            builder = builder.position(sx as f64, sy as f64);
+            // 再检查一遍矩形是否在任一显示器可见区域内
+            // （用户拔副屏 / 当前桌面空间不同 / dev restart 时显示器刚连上时）
+            if position_visible_on_any_monitor(app, sx, sy, w, h) {
+                builder = builder.position(sx as f64, sy as f64);
+            } else {
+                eprintln!(
+                    "[floaty] sticky {} stored pos ({},{}) offscreen → using default",
+                    &sticky.id[..8],
+                    sx,
+                    sy
+                );
+            }
         }
     }
 
