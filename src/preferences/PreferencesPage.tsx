@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { check, Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { getVersion } from "@tauri-apps/api/app";
 import { ipc } from "../ipc/client";
 import { kbd } from "../platform";
+
+type UpdateStatus =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "up-to-date" }
+  | { kind: "available"; update: Update }
+  | { kind: "downloading"; received: number; total: number | null }
+  | { kind: "installed" }
+  | { kind: "error"; message: string };
 
 interface Stats {
   stickies: number;
@@ -17,17 +29,20 @@ export function PreferencesPage() {
   const [globalEnabled, setGlobalEnabled] = useState<boolean>(true);
   const [bubbleEnabled, setBubbleEnabled] = useState<boolean>(true);
   const [floatingEnabled, setFloatingEnabled] = useState<boolean>(true);
+  const [currentVersion, setCurrentVersion] = useState<string>("");
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, d, a, g, bm, fm] = await Promise.all([
+        const [s, d, a, g, bm, fm, v] = await Promise.all([
           invoke<Stats>("get_stats"),
           invoke<string>("get_data_dir"),
           isEnabled(),
           invoke<string | null>("get_setting", { key: "global_shortcut_enabled" }),
           invoke<string | null>("get_setting", { key: "bubble_menu_enabled" }),
           invoke<string | null>("get_setting", { key: "floating_menu_enabled" }),
+          getVersion(),
         ]);
         setStats(s);
         setDataDir(d);
@@ -35,11 +50,55 @@ export function PreferencesPage() {
         setGlobalEnabled(g !== "false");
         setBubbleEnabled(bm !== "false");
         setFloatingEnabled(fm !== "false");
+        setCurrentVersion(v);
       } catch (err) {
         console.error("[floaty] preferences load failed:", err);
       }
     })();
   }, []);
+
+  const checkForUpdate = async () => {
+    setUpdateStatus({ kind: "checking" });
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateStatus({ kind: "up-to-date" });
+        return;
+      }
+      setUpdateStatus({ kind: "available", update });
+    } catch (err) {
+      setUpdateStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const downloadAndInstall = async (update: Update) => {
+    setUpdateStatus({ kind: "downloading", received: 0, total: null });
+    let received = 0;
+    let total: number | null = null;
+    try {
+      await update.downloadAndInstall((evt) => {
+        if (evt.event === "Started") {
+          total = evt.data.contentLength ?? null;
+          setUpdateStatus({ kind: "downloading", received: 0, total });
+        } else if (evt.event === "Progress") {
+          received += evt.data.chunkLength;
+          setUpdateStatus({ kind: "downloading", received, total });
+        } else if (evt.event === "Finished") {
+          setUpdateStatus({ kind: "installed" });
+        }
+      });
+      // macOS 下 downloadAndInstall 不会自动重启，手动 relaunch
+      await relaunch();
+    } catch (err) {
+      setUpdateStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
 
   const toggleGlobal = async (next: boolean) => {
     try {
@@ -136,6 +195,18 @@ export function PreferencesPage() {
           >
             在 Finder 中显示
           </button>
+        </section>
+
+        <section>
+          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">关于 &amp; 更新</div>
+          <div className="text-xs mb-2">
+            当前版本：<span className="font-mono">{currentVersion || "—"}</span>
+          </div>
+          <UpdatePanel
+            status={updateStatus}
+            onCheck={checkForUpdate}
+            onInstall={downloadAndInstall}
+          />
         </section>
 
         <section>
@@ -247,6 +318,95 @@ function Row({ k, d }: { k: string; d: string }) {
     <div className="flex items-center justify-between">
       <span>{d}</span>
       <Kbd>{k}</Kbd>
+    </div>
+  );
+}
+
+function UpdatePanel({
+  status,
+  onCheck,
+  onInstall,
+}: {
+  status: UpdateStatus;
+  onCheck: () => void;
+  onInstall: (u: Update) => void;
+}) {
+  const btn =
+    "text-xs px-3 h-7 rounded border border-black/10 hover:bg-black/5 disabled:opacity-50";
+
+  if (status.kind === "idle") {
+    return (
+      <button className={btn} onClick={onCheck}>
+        检查更新
+      </button>
+    );
+  }
+  if (status.kind === "checking") {
+    return (
+      <button className={btn} disabled>
+        正在检查…
+      </button>
+    );
+  }
+  if (status.kind === "up-to-date") {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs opacity-70">已是最新版本</span>
+        <button className={btn} onClick={onCheck}>
+          再次检查
+        </button>
+      </div>
+    );
+  }
+  if (status.kind === "available") {
+    const u = status.update;
+    return (
+      <div>
+        <div className="text-xs mb-1.5">
+          发现新版本 <span className="font-mono">{u.version}</span>
+          {u.date && (
+            <span className="opacity-50 ml-1.5">{u.date.split(" ")[0]}</span>
+          )}
+        </div>
+        {u.body && (
+          <div className="text-[11px] opacity-75 whitespace-pre-wrap mb-2 p-2 bg-black/5 rounded max-h-32 overflow-auto">
+            {u.body}
+          </div>
+        )}
+        <button className={btn} onClick={() => onInstall(u)}>
+          下载并安装
+        </button>
+      </div>
+    );
+  }
+  if (status.kind === "downloading") {
+    const pct =
+      status.total && status.total > 0
+        ? Math.round((status.received / status.total) * 100)
+        : null;
+    return (
+      <div>
+        <div className="text-xs mb-1">
+          下载中… {pct !== null ? `${pct}%` : `${(status.received / 1024 / 1024).toFixed(1)} MB`}
+        </div>
+        <div className="h-1 bg-black/10 rounded overflow-hidden">
+          <div
+            className="h-full bg-black/40 transition-all"
+            style={{ width: pct !== null ? `${pct}%` : "33%" }}
+          />
+        </div>
+      </div>
+    );
+  }
+  if (status.kind === "installed") {
+    return <div className="text-xs opacity-70">安装完成，正在重启…</div>;
+  }
+  return (
+    <div>
+      <div className="text-xs text-red-600 mb-1.5">更新失败：{status.message}</div>
+      <button className={btn} onClick={onCheck}>
+        重试
+      </button>
     </div>
   );
 }

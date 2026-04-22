@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to upload artifacts + manifest to"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-14
+            target: aarch64-apple-darwin
+            manifest_key: darwin-aarch64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            manifest_key: windows-x86_64
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
+    env:
+      DISPATCH_TAG: ${{ inputs.tag }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+      TARGET: ${{ matrix.target }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri build -- --target "$TARGET"
+        shell: bash
+
+      - name: Collect artifacts (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="src-tauri/target/${TARGET}/release/bundle"
+          mkdir -p release-assets
+          cp "$BUNDLE"/dmg/*.dmg release-assets/
+          cp "$BUNDLE"/macos/*.app.tar.gz release-assets/
+          cp "$BUNDLE"/macos/*.app.tar.gz.sig release-assets/
+          ls -la release-assets/
+
+      - name: Collect artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="src-tauri/target/${TARGET}/release/bundle"
+          mkdir -p release-assets
+          cp "$BUNDLE"/msi/*.msi release-assets/
+          cp "$BUNDLE"/nsis/*-setup.exe release-assets/
+          cp "$BUNDLE"/nsis/*-setup.nsis.zip release-assets/
+          cp "$BUNDLE"/nsis/*-setup.nsis.zip.sig release-assets/
+          ls -la release-assets/
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: floaty-${{ matrix.manifest_key }}
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Attach to release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          fail_on_unmatched_files: false
+
+      - name: Attach to release (manual dispatch)
+        if: github.event_name == 'workflow_dispatch' && env.DISPATCH_TAG != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.DISPATCH_TAG }}
+          files: release-assets/*
+          fail_on_unmatched_files: false
+
+  publish-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: bundles
+
+      - name: Assemble latest.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          MAC_BUNDLE=$(find bundles/floaty-darwin-aarch64 -name '*.app.tar.gz' | head -n 1)
+          MAC_SIG_FILE="${MAC_BUNDLE}.sig"
+          WIN_BUNDLE=$(find bundles/floaty-windows-x86_64 -name '*-setup.nsis.zip' | head -n 1)
+          WIN_SIG_FILE="${WIN_BUNDLE}.sig"
+
+          MAC_FILE=$(basename "$MAC_BUNDLE")
+          WIN_FILE=$(basename "$WIN_BUNDLE")
+          MAC_SIG=$(cat "$MAC_SIG_FILE")
+          WIN_SIG=$(cat "$WIN_SIG_FILE")
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "See https://github.com/$REPO/releases/tag/$TAG" \
+            --arg pub_date "$PUB_DATE" \
+            --arg mac_sig "$MAC_SIG" \
+            --arg mac_url "https://github.com/$REPO/releases/download/$TAG/$MAC_FILE" \
+            --arg win_sig "$WIN_SIG" \
+            --arg win_url "https://github.com/$REPO/releases/download/$TAG/$WIN_FILE" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": { signature: $mac_sig, url: $mac_url },
+                "windows-x86_64": { signature: $win_sig, url: $win_url }
+              }
+            }' > latest.json
+
+          echo "--- latest.json ---"
+          cat latest.json
+
+      - name: Attach latest.json to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: latest.json
+          fail_on_unmatched_files: true
