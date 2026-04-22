@@ -234,12 +234,15 @@ pub async fn restore_on_startup(app: &AppHandle, db: &Db) -> AppResult<()> {
                 Err(e) => eprintln!("[floaty] restore: open failed for {}: {}", &s.id[..8], e),
             }
         }
-        return Ok(());
+    } else {
+        let all = db::stickies::list_all(db).await?;
+        if all.is_empty() {
+            create_welcome(app, db).await?;
+        }
     }
-    let all = db::stickies::list_all(db).await?;
-    if all.is_empty() {
-        create_welcome(app, db).await?;
-    }
+    // tray::init 是同步 block_on 的，restore 是 spawn 的；如果 restore 里建了 welcome，
+    // tray 菜单是"空 DB"状态下构建的，对不上。这里无论走哪条分支都刷一次。
+    crate::tray::refresh_menu(app).await;
     Ok(())
 }
 
