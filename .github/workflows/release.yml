@@ -76,11 +76,12 @@ jobs:
         run: |
           set -euo pipefail
           BUNDLE="src-tauri/target/${TARGET}/release/bundle"
+          echo "--- bundle tree ---"
+          find "$BUNDLE" -maxdepth 3 -type f | sort
           mkdir -p release-assets
           cp "$BUNDLE"/msi/*.msi release-assets/
           cp "$BUNDLE"/nsis/*-setup.exe release-assets/
-          cp "$BUNDLE"/nsis/*-setup.nsis.zip release-assets/
-          cp "$BUNDLE"/nsis/*-setup.nsis.zip.sig release-assets/
+          cp "$BUNDLE"/nsis/*-setup.exe.sig release-assets/
           ls -la release-assets/
 
       - name: Upload bundle artifacts
@@ -129,7 +130,7 @@ jobs:
 
           MAC_BUNDLE=$(find bundles/floaty-darwin-aarch64 -name '*.app.tar.gz' | head -n 1)
           MAC_SIG_FILE="${MAC_BUNDLE}.sig"
-          WIN_BUNDLE=$(find bundles/floaty-windows-x86_64 -name '*-setup.nsis.zip' | head -n 1)
+          WIN_BUNDLE=$(find bundles/floaty-windows-x86_64 -name '*-setup.exe' | head -n 1)
           WIN_SIG_FILE="${WIN_BUNDLE}.sig"
 
           MAC_FILE=$(basename "$MAC_BUNDLE")
