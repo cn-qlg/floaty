@@ -91,6 +91,17 @@ pub async fn delete(db: &Db, id: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// 返回某便签第一条 item（按 sort_order 升序）的 content_md。菜单栏用来提取便签标题。
+pub async fn first_content(db: &Db, sticky_id: &str) -> AppResult<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT content_md FROM items WHERE sticky_id = ? ORDER BY sort_order ASC LIMIT 1",
+    )
+    .bind(sticky_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.map(|r| r.0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

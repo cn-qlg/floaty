@@ -5,11 +5,26 @@ use tauri::{
     AppHandle, Manager,
 };
 
+/// sticky + 内容首行预览，用作菜单里的标题。
+type StickyRow = (Sticky, Option<String>);
+
+async fn load_all_with_preview(db: &Db) -> Vec<StickyRow> {
+    let all = db::stickies::list_all(db).await.unwrap_or_default();
+    let mut out = Vec::with_capacity(all.len());
+    for s in all {
+        let preview = db::items::first_content(db, &s.id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|c| extract_title(&c));
+        out.push((s, preview));
+    }
+    out
+}
+
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
-    // setup 不在 tokio worker，block_on 安全
     let db = app.state::<Db>();
-    let all = tauri::async_runtime::block_on(db::stickies::list_all(&db))
-        .unwrap_or_default();
+    let all = tauri::async_runtime::block_on(load_all_with_preview(&db));
     let menu = build_menu(app, &all)?;
     let icon = app
         .default_window_icon()
@@ -29,13 +44,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 /// 从 IPC（async / tokio worker）调用。必须是 async，不能在里面 block_on。
 pub async fn refresh_menu(app: &AppHandle) {
     let db = app.state::<Db>();
-    let all = match db::stickies::list_all(&db).await {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("[floaty] tray refresh list_all failed: {}", e);
-            return;
-        }
-    };
+    let all = load_all_with_preview(&db).await;
     if let Some(tray) = app.tray_by_id("floaty-tray") {
         match build_menu(app, &all) {
             Ok(menu) => {
@@ -48,7 +57,7 @@ pub async fn refresh_menu(app: &AppHandle) {
     }
 }
 
-fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(app: &AppHandle, all: &[StickyRow]) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     let heading = MenuItem::with_id(
         app,
@@ -59,12 +68,12 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     )?;
     menu.append(&heading)?;
 
-    for (i, s) in all.iter().enumerate() {
+    for (i, (s, preview)) in all.iter().enumerate() {
         let label = if s.hidden == 1 {
-            format!("· 显示：{}", sticky_display_name(s, i))
+            format!("· 显示：{}", sticky_display_name(s, preview.as_deref(), i))
         } else {
             let pin = if s.pinned == 1 { "📌 " } else { "" };
-            format!("{}{}", pin, sticky_display_name(s, i))
+            format!("{}{}", pin, sticky_display_name(s, preview.as_deref(), i))
         };
         let item = MenuItem::with_id(
             app,
@@ -78,7 +87,7 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
-    let hidden_count = all.iter().filter(|s| s.hidden == 1).count();
+    let hidden_count = all.iter().filter(|(s, _)| s.hidden == 1).count();
     let label_text = if hidden_count > 0 {
         format!("显示全部（共 {} 张，{} 隐藏）", all.len(), hidden_count)
     } else {
@@ -123,12 +132,101 @@ fn build_menu(app: &AppHandle, all: &[Sticky]) -> tauri::Result<Menu<tauri::Wry>
     Ok(menu)
 }
 
-fn sticky_display_name(s: &Sticky, index: usize) -> String {
-    if s.title.is_empty() {
-        format!("便签 #{}", index + 1)
-    } else {
-        s.title.clone()
+#[cfg(test)]
+mod tests {
+    use super::extract_title;
+
+    #[test]
+    fn heading() {
+        assert_eq!(extract_title("# 本周冲刺\n- 这里是内容"), Some("本周冲刺".into()));
     }
+
+    #[test]
+    fn task_item_with_due() {
+        assert_eq!(
+            extract_title("- [ ] 买牛奶 @due:2026-04-25T10:00:00Z"),
+            Some("买牛奶".into())
+        );
+    }
+
+    #[test]
+    fn strips_marks_and_link() {
+        assert_eq!(
+            extract_title("- [ ] **重要** [点这里](https://x.com) 去办"),
+            Some("重要 点这里 去办".into())
+        );
+    }
+
+    #[test]
+    fn truncates_long_text() {
+        let long = "这是一段非常非常非常非常非常非常非常非常非常长的标题用来测试截断功能是否正常工作";
+        let title = extract_title(long).unwrap();
+        assert!(title.ends_with('…'));
+        assert!(title.chars().count() <= 25);
+    }
+
+    #[test]
+    fn none_for_empty() {
+        assert_eq!(extract_title(""), None);
+        assert_eq!(extract_title("   \n\n   "), None);
+    }
+
+    #[test]
+    fn skips_empty_and_decoration_only_lines() {
+        assert_eq!(extract_title("- [ ] \n- [ ] real"), Some("real".into()));
+    }
+}
+
+fn sticky_display_name(s: &Sticky, preview: Option<&str>, index: usize) -> String {
+    if !s.title.is_empty() {
+        return s.title.clone();
+    }
+    if let Some(p) = preview {
+        if !p.is_empty() {
+            return p.to_string();
+        }
+    }
+    format!("便签 #{}", index + 1)
+}
+
+/// 从 markdown 提取一个适合做便签标题的短字符串（<= 24 字符）。
+/// 跳过 markdown 装饰（# / - [ ] / > / ** / * / ` / ~~ / [text](url) / @due:...）。
+/// 返回 None 表示整段内容没有可读文字。
+pub fn extract_title(md: &str) -> Option<String> {
+    use regex::Regex;
+    // 行首 block 装饰：task / heading / 有序无序列表 / quote
+    let block_re = Regex::new(r"^(?:- \[[ xX]\]|#{1,6}|[-*]|\d+\.|>)\s*").ok()?;
+    let due_re = Regex::new(r"@due:\S+").ok()?;
+    let link_re = Regex::new(r"\[([^\]]+)\]\([^)]+\)").ok()?;
+    let bold_re = Regex::new(r"\*\*(.+?)\*\*").ok()?;
+    let italic_re = Regex::new(r"\*(.+?)\*").ok()?;
+    let strike_re = Regex::new(r"~~(.+?)~~").ok()?;
+    let code_re = Regex::new(r"`([^`]+)`").ok()?;
+
+    for raw in md.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let stripped = block_re.replace(line, "").to_string();
+        let mut s = stripped;
+        s = due_re.replace_all(&s, "").to_string();
+        s = link_re.replace_all(&s, "$1").to_string();
+        s = bold_re.replace_all(&s, "$1").to_string();
+        s = italic_re.replace_all(&s, "$1").to_string();
+        s = strike_re.replace_all(&s, "$1").to_string();
+        s = code_re.replace_all(&s, "$1").to_string();
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let title: String = trimmed.chars().take(24).collect();
+        if trimmed.chars().count() > 24 {
+            return Some(format!("{}…", title));
+        }
+        return Some(title);
+    }
+    None
 }
 
 fn on_menu_event(app: &AppHandle, event: MenuEvent) {
