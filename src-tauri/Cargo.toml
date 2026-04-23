@@ -1,6 +1,6 @@
 [package]
 name = "floaty"
-version = "0.1.5"
+version = "0.1.6"
 description = "A Tauri App"
 authors = ["cn_qlg <cn_qlg@163.com>"]
 edition = "2021"

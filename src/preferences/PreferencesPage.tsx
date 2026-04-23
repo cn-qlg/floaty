@@ -3,9 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { save } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { ipc } from "../ipc/client";
-import { kbd } from "../platform";
+import { kbd, IS_MAC } from "../platform";
 
 type UpdateStatus =
   | { kind: "idle" }
@@ -31,6 +32,12 @@ export function PreferencesPage() {
   const [floatingEnabled, setFloatingEnabled] = useState<boolean>(true);
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
+  const [backupStatus, setBackupStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "done"; path: string }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
 
   useEffect(() => {
     (async () => {
@@ -153,6 +160,42 @@ export function PreferencesPage() {
     }
   };
 
+  const revealBackup = async (path: string) => {
+    // 没有稳定跨平台的 reveal-in-dir，就打开父目录，用户自己能看到文件。
+    const sep = IS_MAC ? "/" : path.includes("\\") ? "\\" : "/";
+    const parent = path.substring(0, path.lastIndexOf(sep));
+    try {
+      await invoke("plugin:opener|open_path", { path: parent });
+    } catch (err) {
+      console.error("[floaty] reveal backup failed:", err);
+    }
+  };
+
+  const runBackup = async () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const stamp =
+      `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-` +
+      `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const defaultName = `floaty-backup-${stamp}.db`;
+    try {
+      const selected = await save({
+        title: "保存 Floaty 备份",
+        defaultPath: defaultName,
+        filters: [{ name: "SQLite Database", extensions: ["db"] }],
+      });
+      if (!selected) return; // 用户取消
+      setBackupStatus({ kind: "running" });
+      const path = await invoke<string>("backup_database", { targetPath: selected });
+      setBackupStatus({ kind: "done", path });
+    } catch (err) {
+      setBackupStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
   const newSticky = async () => {
     try {
       await ipc.newStickyWindow();
@@ -187,14 +230,41 @@ export function PreferencesPage() {
         </section>
 
         <section>
-          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">数据目录</div>
+          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">数据目录 &amp; 备份</div>
           <div className="text-[11px] font-mono break-all p-2 bg-black/5 rounded">{dataDir}</div>
-          <button
-            className="mt-2 text-xs px-3 h-7 rounded border border-black/10 hover:bg-black/5"
-            onClick={openDataDir}
-          >
-            在 Finder 中显示
-          </button>
+          <div className="mt-2 flex gap-2 flex-wrap">
+            <button
+              className="text-xs px-3 h-7 rounded border border-black/10 hover:bg-black/5"
+              onClick={openDataDir}
+            >
+              {IS_MAC ? "在 Finder 中显示" : "在资源管理器中显示"}
+            </button>
+            <button
+              className="text-xs px-3 h-7 rounded border border-black/10 hover:bg-black/5 disabled:opacity-50"
+              onClick={runBackup}
+              disabled={backupStatus.kind === "running"}
+            >
+              {backupStatus.kind === "running" ? "正在备份…" : "立即备份到…"}
+            </button>
+          </div>
+          {backupStatus.kind === "done" && (
+            <div className="mt-2 text-[11px] flex items-center gap-2 flex-wrap">
+              <span className="opacity-70">已备份到：</span>
+              <span className="font-mono break-all">{backupStatus.path}</span>
+              <button
+                className="text-[11px] px-2 h-6 rounded border border-black/10 hover:bg-black/5"
+                onClick={() => revealBackup(backupStatus.path)}
+              >
+                {IS_MAC ? "在 Finder 打开" : "打开所在文件夹"}
+              </button>
+            </div>
+          )}
+          {backupStatus.kind === "error" && (
+            <div className="mt-2 text-[11px] text-red-600">备份失败：{backupStatus.message}</div>
+          )}
+          <div className="mt-2 text-[10px] opacity-50">
+            备份会把 floaty.db 原样复制一份（使用 SQLite VACUUM INTO，运行时也安全）。出问题时把备份文件替换回数据目录即可恢复。
+          </div>
         </section>
 
         <section>

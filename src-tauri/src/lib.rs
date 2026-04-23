@@ -116,6 +116,7 @@ pub fn run() {
             commands::windows::get_data_dir,
             commands::windows::get_setting,
             commands::windows::set_setting,
+            commands::windows::backup_database,
             commands::reminders::sync_reminders,
             commands::reminders::snooze_reminder,
         ])

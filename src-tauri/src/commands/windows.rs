@@ -168,3 +168,25 @@ pub struct StatsPayload {
     pub items: i64,
     pub pending_reminders: i64,
 }
+
+/// 用 SQLite 的 `VACUUM INTO` 把整个数据库安全复制到 target_path（避免 WAL 不一致）。
+/// 前端先用 dialog.save 让用户选位置。路径里若有单引号会被转义。
+#[tauri::command]
+pub async fn backup_database(db: State<'_, Db>, target_path: String) -> AppResult<String> {
+    if target_path.is_empty() {
+        return Err(crate::error::AppError::Other("target path is empty".into()));
+    }
+    // 父目录必须存在；若不存在就建一下（dialog 返回的是已存在目录下的新文件名，一般 OK）。
+    if let Some(parent) = std::path::Path::new(&target_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                crate::error::AppError::Other(format!("create parent dir: {}", e))
+            })?;
+        }
+    }
+    // VACUUM INTO 不支持参数绑定，必须拼接。转义单引号（SQLite 里 '' 代表 '）。
+    let escaped = target_path.replace('\'', "''");
+    let sql = format!("VACUUM INTO '{}'", escaped);
+    sqlx::query(&sql).execute(db.inner()).await?;
+    Ok(target_path)
+}
