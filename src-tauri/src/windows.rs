@@ -2,7 +2,7 @@ use crate::db::{self, stickies::Sticky, Db};
 use crate::error::{AppError, AppResult};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 /// 标签前缀 + sticky id 构成窗口 label
@@ -421,8 +421,15 @@ fn attach_geometry_listener(window: &WebviewWindow, sticky_id: String) -> AppRes
     // 解决 macOS 拖动/resize 连续 Moved → 多个 async task 乱序完成 → 旧值覆盖新值的
     // race（症状：关掉便签再恢复后位置"乱跳"）。
     let seq = Arc::new(AtomicU64::new(0));
+    // 窗口 build 后的前 1 秒内，macOS / tao 会先发 Moved(default) / Resized(default) 等
+    // 中间过渡事件，把 builder 设好的位置/尺寸覆盖掉。忽略这段时间的事件。
+    let startup_at = Instant::now();
+    const STARTUP_IGNORE: Duration = Duration::from_millis(1000);
     window.on_window_event(move |event| {
         use tauri::WindowEvent;
+        if startup_at.elapsed() < STARTUP_IGNORE {
+            return;
+        }
         let Some(win) = app.get_webview_window(&label) else { return; };
         let scale = win.scale_factor().unwrap_or(1.0);
         let (x, y, w, h) = match event {
@@ -446,6 +453,10 @@ fn attach_geometry_listener(window: &WebviewWindow, sticky_id: String) -> AppRes
         };
         // -32000 的"伪隐藏"位置：直接忽略
         if sanitize_position(x, y).is_none() {
+            return;
+        }
+        // 再加一层保护：极小尺寸（< 100）几乎肯定是建窗时的过渡值，不写回
+        if w < 100 || h < 100 {
             return;
         }
         let my_seq = seq.fetch_add(1, Ordering::SeqCst) + 1;

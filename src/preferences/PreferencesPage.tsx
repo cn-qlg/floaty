@@ -262,9 +262,6 @@ export function PreferencesPage() {
           {backupStatus.kind === "error" && (
             <div className="mt-2 text-[11px] text-red-600">备份失败：{backupStatus.message}</div>
           )}
-          <div className="mt-2 text-[10px] opacity-50">
-            备份会把 floaty.db 原样复制一份（使用 SQLite VACUUM INTO，运行时也安全）。出问题时把备份文件替换回数据目录即可恢复。
-          </div>
         </section>
 
         <section>
