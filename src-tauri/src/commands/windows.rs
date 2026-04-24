@@ -98,6 +98,27 @@ pub async fn open_preferences(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub async fn open_search(app: AppHandle) -> AppResult<()> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+    if let Some(w) = app.get_webview_window("search") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, "search", WebviewUrl::App("index.html#/search".into()))
+        .title("搜索 Floaty")
+        .inner_size(480.0, 560.0)
+        .resizable(true)
+        .decorations(true)
+        .transparent(false)
+        .always_on_top(true)
+        .visible(true)
+        .build()
+        .map_err(|e| crate::error::AppError::Other(format!("search window: {}", e)))?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_stats(db: State<'_, Db>) -> AppResult<StatsPayload> {
     let sticky_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM stickies")
         .fetch_one(db.inner())

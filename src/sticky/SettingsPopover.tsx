@@ -20,6 +20,23 @@ const PRESET_COLORS = [
   { name: "灰", value: "#D0D0D0" },
 ];
 
+/// 一键切整套外观（bg + 字色 + 透明度 + 字号）
+interface Theme {
+  name: string;
+  bg: string;
+  fg: string;
+  opacity: number;
+  font_size: number;
+}
+const THEMES: Theme[] = [
+  { name: "默认",   bg: "#FFDC96", fg: "#3A2E10", opacity: 0.85, font_size: 14 },
+  { name: "纸质",   bg: "#F5ECD9", fg: "#3A2E10", opacity: 0.95, font_size: 14 },
+  { name: "薄荷",   bg: "#B4E6C8", fg: "#1F3A2A", opacity: 0.88, font_size: 14 },
+  { name: "黄昏",   bg: "#FFB4A0", fg: "#3A1E14", opacity: 0.90, font_size: 14 },
+  { name: "石板",   bg: "#3A3A42", fg: "#F0F0F0", opacity: 0.95, font_size: 14 },
+  { name: "柠檬",   bg: "#FFF6A8", fg: "#403800", opacity: 0.88, font_size: 15 },
+];
+
 export function SettingsPopover({ sticky, onPatch, onClose, onDelete }: SettingsPopoverProps) {
   // "auto" = 字体颜色是不是等于 autoFg(bg)；此状态是 UI 级（不入 DB）
   const [fontColorAuto, setFontColorAuto] = useState(
@@ -72,6 +89,39 @@ export function SettingsPopover({ sticky, onPatch, onClose, onDelete }: Settings
       </div>
 
       <div className="p-3 space-y-3 text-xs overflow-y-auto">
+        {/* 主题 — 一键切整套配色 */}
+        <div>
+          <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">主题</div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {THEMES.map((t) => {
+              const selected =
+                sticky.bg_color.toLowerCase() === t.bg.toLowerCase() &&
+                (sticky.font_color ?? autoFg(sticky.bg_color)).toLowerCase() === t.fg.toLowerCase();
+              return (
+                <button
+                  key={t.name}
+                  className={`h-12 rounded border-2 text-[10px] font-medium flex items-center justify-center transition ${
+                    selected ? "border-black/40" : "border-transparent hover:border-black/15"
+                  }`}
+                  style={{ backgroundColor: t.bg, color: t.fg }}
+                  onClick={() => {
+                    setFontColorAuto(false); // 主题明确设了 fg，锁成自定义
+                    onPatch({
+                      bg_color: t.bg,
+                      font_color: t.fg,
+                      opacity: t.opacity,
+                      font_size: t.font_size,
+                    });
+                  }}
+                  title={`${t.name} · ${Math.round(t.opacity * 100)}% · ${t.font_size}px`}
+                >
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* 背景色 */}
         <div>
           <div className="text-[10px] uppercase tracking-wider opacity-60 mb-1.5">背景色</div>

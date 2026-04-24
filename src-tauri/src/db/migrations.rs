@@ -4,6 +4,8 @@ static MIGRATIONS: &[(&str, &str)] = &[
     ("0001_init", include_str!("../../migrations/0001_init.sql")),
     ("0002_reminders", include_str!("../../migrations/0002_reminders.sql")),
     ("0003_settings", include_str!("../../migrations/0003_settings.sql")),
+    ("0004_soft_delete", include_str!("../../migrations/0004_soft_delete.sql")),
+    ("0005_fts", include_str!("../../migrations/0005_fts.sql")),
 ];
 
 pub async fn run(pool: &SqlitePool) -> anyhow::Result<()> {

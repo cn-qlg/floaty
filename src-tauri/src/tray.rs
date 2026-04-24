@@ -1,6 +1,6 @@
 use crate::db::{self, stickies::Sticky, Db};
 use tauri::{
-    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
     AppHandle, Manager,
 };
@@ -22,10 +22,29 @@ async fn load_all_with_preview(db: &Db) -> Vec<StickyRow> {
     out
 }
 
+async fn load_trashed_with_preview(db: &Db) -> Vec<StickyRow> {
+    let trashed = db::stickies::list_trashed(db).await.unwrap_or_default();
+    let mut out = Vec::with_capacity(trashed.len());
+    for s in trashed {
+        let preview = db::items::first_content(db, &s.id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|c| extract_title(&c));
+        out.push((s, preview));
+    }
+    out
+}
+
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let db = app.state::<Db>();
-    let all = tauri::async_runtime::block_on(load_all_with_preview(&db));
-    let menu = build_menu(app, &all)?;
+    let (all, trashed) = tauri::async_runtime::block_on(async {
+        (
+            load_all_with_preview(&db).await,
+            load_trashed_with_preview(&db).await,
+        )
+    });
+    let menu = build_menu(app, &all, &trashed)?;
     let icon = app
         .default_window_icon()
         .cloned()
@@ -45,8 +64,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 pub async fn refresh_menu(app: &AppHandle) {
     let db = app.state::<Db>();
     let all = load_all_with_preview(&db).await;
+    let trashed = load_trashed_with_preview(&db).await;
     if let Some(tray) = app.tray_by_id("floaty-tray") {
-        match build_menu(app, &all) {
+        match build_menu(app, &all, &trashed) {
             Ok(menu) => {
                 if let Err(e) = tray.set_menu(Some(menu)) {
                     eprintln!("[floaty] tray refresh set_menu failed: {}", e);
@@ -57,7 +77,11 @@ pub async fn refresh_menu(app: &AppHandle) {
     }
 }
 
-fn build_menu(app: &AppHandle, all: &[StickyRow]) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(
+    app: &AppHandle,
+    all: &[StickyRow],
+    trashed: &[StickyRow],
+) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::new(app)?;
     let heading = MenuItem::with_id(
         app,
@@ -121,11 +145,50 @@ fn build_menu(app: &AppHandle, all: &[StickyRow]) -> tauri::Result<Menu<tauri::W
     )?;
     menu.append(&new_item)?;
 
+    let search_item = MenuItem::with_id(
+        app,
+        "search",
+        "🔍 搜索便签",
+        !all.is_empty(),
+        None::<&str>,
+    )?;
+    menu.append(&search_item)?;
+
     let help = MenuItem::with_id(app, "welcome", "📖 上手指南", true, None::<&str>)?;
     menu.append(&help)?;
 
     let prefs = MenuItem::with_id(app, "preferences", "⚙️ 偏好设置", true, None::<&str>)?;
     menu.append(&prefs)?;
+
+    // 回收站：作为子菜单，始终出现（空的时候 disabled）。便签 "删除" 后进这里，30 天后自动清空。
+    let trash_label = if trashed.is_empty() {
+        "🗑️ 回收站（空）".to_string()
+    } else {
+        format!("🗑️ 回收站（{}）", trashed.len())
+    };
+    let trash_submenu = Submenu::with_id(app, "trash", trash_label, !trashed.is_empty())?;
+    for (i, (s, preview)) in trashed.iter().enumerate() {
+        let item = MenuItem::with_id(
+            app,
+            format!("trash-restore:{}", s.id),
+            format!("恢复：{}", sticky_display_name(s, preview.as_deref(), i)),
+            true,
+            None::<&str>,
+        )?;
+        trash_submenu.append(&item)?;
+    }
+    if !trashed.is_empty() {
+        trash_submenu.append(&PredefinedMenuItem::separator(app)?)?;
+        let empty = MenuItem::with_id(
+            app,
+            "trash-empty",
+            "清空回收站",
+            true,
+            None::<&str>,
+        )?;
+        trash_submenu.append(&empty)?;
+    }
+    menu.append(&trash_submenu)?;
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&PredefinedMenuItem::quit(app, Some("退出"))?)?;
@@ -240,6 +303,15 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
         });
         return;
     }
+    if id == "search" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = crate::commands::windows::open_search(handle).await {
+                eprintln!("[floaty] open_search failed: {}", e);
+            }
+        });
+        return;
+    }
     if id == "welcome" {
         let handle = app.clone();
         tauri::async_runtime::spawn(async move {
@@ -308,6 +380,31 @@ fn on_menu_event(app: &AppHandle, event: MenuEvent) {
                 }
                 Err(e) => eprintln!("[floaty] tray get failed: {}", e),
             }
+        });
+    } else if let Some(sticky_id) = id.strip_prefix("trash-restore:") {
+        let handle = app.clone();
+        let sticky_id = sticky_id.to_string();
+        tauri::async_runtime::spawn(async move {
+            let db = handle.state::<Db>();
+            match db::stickies::restore(&db, &sticky_id).await {
+                Ok(s) => {
+                    if let Err(e) = crate::windows::open(&handle, &s).await {
+                        eprintln!("[floaty] tray restore open failed: {}", e);
+                    }
+                    refresh_menu(&handle).await;
+                }
+                Err(e) => eprintln!("[floaty] tray restore failed: {}", e),
+            }
+        });
+    } else if id == "trash-empty" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let db = handle.state::<Db>();
+            match db::stickies::purge_older_than(&db, i64::MAX).await {
+                Ok(n) => eprintln!("[floaty] trash emptied: purged {} stickies", n),
+                Err(e) => eprintln!("[floaty] trash empty failed: {}", e),
+            }
+            refresh_menu(&handle).await;
         });
     }
 }

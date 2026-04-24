@@ -85,6 +85,20 @@ pub fn run() {
                 });
             }
 
+            // 自动清理回收站：硬删 deleted_at 超过 30 天的便签。
+            {
+                let purge_pool = pool.clone();
+                tauri::async_runtime::spawn(async move {
+                    let cutoff = chrono::Utc::now().timestamp_millis()
+                        - 30 * 24 * 60 * 60 * 1000;
+                    match db::stickies::purge_older_than(&purge_pool, cutoff).await {
+                        Ok(0) => {}
+                        Ok(n) => eprintln!("[floaty] auto-purged {} stickies older than 30d", n),
+                        Err(e) => eprintln!("[floaty] auto-purge failed: {}", e),
+                    }
+                });
+            }
+
             let scheduler = reminders::Scheduler::new();
             app.manage(scheduler.clone());
             scheduler.spawn_loop(app.handle().clone());
@@ -112,6 +126,10 @@ pub fn run() {
             commands::stickies::create_sticky,
             commands::stickies::update_sticky,
             commands::stickies::delete_sticky,
+            commands::stickies::list_trashed_stickies,
+            commands::stickies::restore_sticky,
+            commands::stickies::purge_sticky,
+            commands::stickies::empty_trash,
             commands::items::list_items,
             commands::items::upsert_item,
             commands::items::toggle_item,
@@ -125,6 +143,8 @@ pub fn run() {
             commands::windows::new_sticky_window,
             commands::windows::open_welcome,
             commands::windows::open_preferences,
+            commands::windows::open_search,
+            commands::search::search_stickies,
             commands::windows::get_stats,
             commands::windows::get_data_dir,
             commands::windows::get_setting,

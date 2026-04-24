@@ -49,7 +49,7 @@ pub async fn update_sticky(
 
 #[tauri::command]
 pub async fn delete_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> AppResult<()> {
-    // 先关掉窗口（destroy webview），再删 DB（级联删 items + reminders）
+    // 软删：关闭窗口 + 设 deleted_at（items / reminders 暂留，等 purge 时再物理级联）
     if let Some(w) = app.get_webview_window(&crate::windows::label(&id)) {
         w.close()
             .map_err(|e| AppError::Other(format!("delete_sticky close: {}", e)))?;
@@ -57,4 +57,34 @@ pub async fn delete_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> App
     db::stickies::delete(&db, &id).await?;
     crate::tray::refresh_menu(&app).await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_trashed_stickies(db: State<'_, Db>) -> AppResult<Vec<Sticky>> {
+    db::stickies::list_trashed(&db).await
+}
+
+#[tauri::command]
+pub async fn restore_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> AppResult<Sticky> {
+    let s = db::stickies::restore(&db, &id).await?;
+    // 还原后自动打开（像新建一样）
+    let _ = crate::windows::open(&app, &s).await;
+    crate::tray::refresh_menu(&app).await;
+    Ok(s)
+}
+
+#[tauri::command]
+pub async fn purge_sticky(app: AppHandle, db: State<'_, Db>, id: String) -> AppResult<()> {
+    db::stickies::purge(&db, &id).await?;
+    crate::tray::refresh_menu(&app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn empty_trash(app: AppHandle, db: State<'_, Db>) -> AppResult<u64> {
+    // 把所有回收站便签硬删：传一个"未来很远"的 cutoff
+    let future = i64::MAX;
+    let count = db::stickies::purge_older_than(&db, future).await?;
+    crate::tray::refresh_menu(&app).await;
+    Ok(count)
 }
