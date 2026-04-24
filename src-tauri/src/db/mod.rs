@@ -5,6 +5,7 @@ pub mod migrations;
 pub mod stickies;
 pub mod items;
 pub mod reminders;
+pub mod snapshots;
 
 pub type Db = SqlitePool;
 

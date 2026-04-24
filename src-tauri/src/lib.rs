@@ -66,11 +66,24 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            let pool = tauri::async_runtime::block_on(async move {
-                let data_dir = handle.path().app_data_dir().expect("app_data_dir");
-                db::init(data_dir).await.expect("db init")
+            let data_dir = handle.path().app_data_dir().expect("app_data_dir");
+            let pool = tauri::async_runtime::block_on({
+                let data_dir = data_dir.clone();
+                async move { db::init(data_dir).await.expect("db init") }
             });
             app.manage(pool.clone());
+
+            // 自动快照：不阻塞启动，失败也不影响。保留最近 10 份。
+            {
+                let snap_pool = pool.clone();
+                let snap_dir = data_dir.clone();
+                tauri::async_runtime::spawn(async move {
+                    match db::snapshots::take(&snap_pool, &snap_dir).await {
+                        Ok(path) => eprintln!("[floaty] startup snapshot → {}", path.display()),
+                        Err(e) => eprintln!("[floaty] startup snapshot failed: {}", e),
+                    }
+                });
+            }
 
             let scheduler = reminders::Scheduler::new();
             app.manage(scheduler.clone());
