@@ -107,7 +107,7 @@ export function Editor({ initialMarkdown, onChange }: EditorProps) {
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       TaskList,
-      TaskItem.configure({ nested: false }),
+      TaskItem.configure({ nested: true }),
       Link.configure({ openOnClick: false }),
       MarkdownLinkShortcut,
       DueTime.configure({

@@ -27,14 +27,18 @@ ul[data-type="taskList"] {
 ul[data-type="taskList"] li {
   display: flex;
   gap: 0.5rem;
-  align-items: baseline;
+  align-items: flex-start;
   margin: 2px 0;
 }
+/* checkbox 跟首行文本对齐：label 高度 = 一行（line-height），内部 center → 跟随字号自动居中 */
 ul[data-type="taskList"] li > label {
   user-select: none;
-  align-self: center;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  height: 1.5em;
 }
 ul[data-type="taskList"] li > label > input[type="checkbox"] {
   margin: 0;
@@ -42,12 +46,14 @@ ul[data-type="taskList"] li > label > input[type="checkbox"] {
 }
 ul[data-type="taskList"] li > div {
   flex: 1;
+  min-width: 0;
 }
 ul[data-type="taskList"] li > div p {
   margin: 0;
   line-height: 1.5;
 }
-ul[data-type="taskList"] li[data-checked="true"] > div {
+/* 父任务勾选只划掉自己那行；子任务保持原状（用户语义：父子无关联） */
+ul[data-type="taskList"] li[data-checked="true"] > div > p {
   opacity: 0.5;
   text-decoration: line-through;
 }

@@ -123,6 +123,26 @@ describe("markdown extended blocks", () => {
     expect(doc.content?.[0].type).toBe("taskList");
     expect(doc.content?.[1].type).toBe("bulletList");
   });
+
+  it("round-trips nested task list (2-space indent)", () => {
+    const md = "- [ ] 主任务\n  - [ ] 子任务 1\n  - [x] 子任务 2";
+    const doc = markdownToDoc(md);
+    expect(doc.content?.[0].type).toBe("taskList");
+    const parent = doc.content?.[0].content?.[0];
+    expect(parent?.attrs?.checked).toBe(false);
+    // parent.content = [paragraph, taskList]
+    expect(parent?.content?.[0].type).toBe("paragraph");
+    expect(parent?.content?.[1].type).toBe("taskList");
+    expect(parent?.content?.[1].content).toHaveLength(2);
+    expect(parent?.content?.[1].content?.[0].attrs?.checked).toBe(false);
+    expect(parent?.content?.[1].content?.[1].attrs?.checked).toBe(true);
+    expect(docToMarkdown(doc)).toBe(md);
+  });
+
+  it("round-trips two levels of nesting", () => {
+    const md = "- [ ] A\n  - [ ] A.1\n    - [x] A.1.a\n  - [ ] A.2";
+    expect(docToMarkdown(markdownToDoc(md))).toBe(md);
+  });
 });
 
 describe("extractDues", () => {

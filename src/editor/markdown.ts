@@ -26,7 +26,7 @@ function serializeBlock(node: ProseNode): string {
     case "paragraph":
       return serializeInline(node.content ?? []);
     case "taskList":
-      return (node.content ?? []).map(serializeTaskItem).join("\n");
+      return (node.content ?? []).map((item) => serializeTaskItem(item, 0)).join("\n");
     case "bulletList":
       return (node.content ?? [])
         .map((li) => "- " + serializeListItemInner(li))
@@ -54,10 +54,28 @@ function serializeBlock(node: ProseNode): string {
   }
 }
 
-function serializeTaskItem(node: ProseNode): string {
+/// 序列化 taskItem。indent 是层级（0=顶层），每层缩进 2 个空格。
+/// taskItem 的 content 通常是 [paragraph, ...optional taskList]，把段落作为本行文本，
+/// 子 taskList 递归输出在下一层缩进。
+function serializeTaskItem(node: ProseNode, indent: number): string {
+  const pad = "  ".repeat(indent);
   const checked = node.attrs?.checked ? "x" : " ";
-  const inner = (node.content ?? []).map(serializeBlock).join(" ");
-  return `- [${checked}] ${inner}`;
+  const lines: string[] = [];
+  let textWritten = false;
+  for (const child of node.content ?? []) {
+    if (child.type === "paragraph" && !textWritten) {
+      lines.push(`${pad}- [${checked}] ${serializeInline(child.content ?? [])}`);
+      textWritten = true;
+    } else if (child.type === "taskList") {
+      for (const sub of child.content ?? []) {
+        lines.push(serializeTaskItem(sub, indent + 1));
+      }
+    } else if (child.type === "paragraph") {
+      lines.push(`${pad}  ${serializeInline(child.content ?? [])}`);
+    }
+  }
+  if (!textWritten) lines.unshift(`${pad}- [${checked}] `);
+  return lines.join("\n");
 }
 
 function serializeListItemInner(li: ProseNode): string {
@@ -116,14 +134,14 @@ export function extractDues(md: string): DueEntry[] {
   let nonEmptyIndex = 0;
   for (const line of lines) {
     if (line.trim() === "") continue;
-    // 已完成的 todo 不再产生提醒
-    const isCompletedTodo = /^- \[x\] /.test(line);
+    // 已完成的 todo 不再产生提醒（含缩进的子任务）
+    const isCompletedTodo = /^\s*- \[x\] /.test(line);
     if (!isCompletedTodo) {
       const matches = [...line.matchAll(DUE_RE_GLOBAL)];
       if (matches.length > 0) {
         const preview = line
           .replace(DUE_RE_GLOBAL, "")
-          .replace(/^- \[[ x]\] /, "")
+          .replace(/^\s*- \[[ x]\] /, "")
           .replace(/^#+\s+/, "")
           .replace(/\*\*(.+?)\*\*/g, "$1")
           .replace(/\*(.+?)\*/g, "$1")
@@ -198,20 +216,11 @@ export function markdownToDoc(md: string): ProseDoc {
       continue;
     }
 
-    // --- Task list (- [ ] / - [x]) ---
+    // --- Task list (- [ ] / - [x]，支持 2-空格缩进的嵌套子任务) ---
     if (/^- \[( |x)\] /.test(line)) {
-      const tasks: ProseNode[] = [];
-      while (i < lines.length) {
-        const t = lines[i].match(/^- \[( |x)\] (.*)$/);
-        if (!t) break;
-        tasks.push({
-          type: "taskItem",
-          attrs: { checked: t[1] === "x" },
-          content: [{ type: "paragraph", content: parseInline(t[2]) }],
-        });
-        i++;
-      }
-      blocks.push({ type: "taskList", content: tasks });
+      const parsed = parseTaskList(lines, i, 0);
+      blocks.push({ type: "taskList", content: parsed.tasks });
+      i = parsed.nextI;
       continue;
     }
 
@@ -265,6 +274,47 @@ export function markdownToDoc(md: string): ProseDoc {
   }
 
   return { type: "doc", content: blocks };
+}
+
+/// 递归解析 task-list（含嵌套）。从 startI 起消费所有 baseIndent 缩进的 task 行，
+/// 遇到下一个比 baseIndent 更深的 - [ ] 则把它们作为前一项的子 taskList。
+/// 返回 { tasks, nextI }，nextI 是已停下的下一行。
+function parseTaskList(
+  lines: string[],
+  startI: number,
+  baseIndent: number,
+): { tasks: ProseNode[]; nextI: number } {
+  const tasks: ProseNode[] = [];
+  let i = startI;
+  const taskRe = /^(\s*)- \[( |x)\] (.*)$/;
+  while (i < lines.length) {
+    const m = lines[i].match(taskRe);
+    if (!m) break;
+    const indent = m[1].length;
+    if (indent !== baseIndent) break;
+    const checked = m[2] === "x";
+    const text = m[3];
+    i++;
+    const childContent: ProseNode[] = [
+      { type: "paragraph", content: parseInline(text) },
+    ];
+    if (i < lines.length) {
+      const next = lines[i].match(taskRe);
+      if (next && next[1].length > indent) {
+        const child = parseTaskList(lines, i, next[1].length);
+        if (child.tasks.length > 0) {
+          childContent.push({ type: "taskList", content: child.tasks });
+          i = child.nextI;
+        }
+      }
+    }
+    tasks.push({
+      type: "taskItem",
+      attrs: { checked },
+      content: childContent,
+    });
+  }
+  return { tasks, nextI: i };
 }
 
 function parseInline(text: string): ProseNode[] {
