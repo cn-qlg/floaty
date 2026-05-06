@@ -15,12 +15,16 @@
 
 ## 功能一瞥
 
-- **多便签浮动窗口**：拖动 / resize / 单独置顶 / 菜单栏常驻（纯 tray 应用）
-- **Markdown 编辑**：checkbox / 列表 / 引用 / 代码块 / 粗斜删除线 / 链接 …… 完整双向 round-trip
+- **多便签浮动窗口**：拖动 / resize / 单独置顶 / 菜单栏常驻（纯 tray 应用）/ 新建自动级联位置
+- **Markdown 编辑**：checkbox（含 Tab 缩进子任务）/ 列表 / 引用 / 代码块 / 粗斜删除线 / 链接，完整双向 round-trip
 - **选中文字 + 空行浮动工具栏**：不会 markdown 也能插入待办、加粗、建标题
 - **智能时间识别**：输入 `今天下午3点` / `30分钟后` / `下周一` / `4月25日` 等直接识别 → 彩色 pill + 系统通知
 - **紧急度配色**：逾期红 / 1h 红 / 今天橙 / 本周黄 / 更晚灰，每分钟刷新
-- **外观自定义**：每便签独立背景色 / 透明度 / 字号 / 字色
+- **外观自定义**：6 套主题预设（含暗色"石板"）+ 每便签独立背景 / 透明度 / 字号 / 字色
+- **全文搜索**：菜单栏 🔍 → SQLite FTS5 模糊查所有便签内容
+- **回收站**：30 天软删恢复期，菜单栏可还原；启动时自动 purge 过期数据
+- **数据安全**：每次启动自动快照（保留最近 10 份）+ 一键手动备份到任意位置
+- **自动更新**：偏好设置一键检查更新，下载安装重启全自动（minisign 签名）
 - **跨平台快捷键**：全局 `⌘⇧N` / `Ctrl+Shift+N` + 一套便签内操作键
 - **完全本地**：SQLite 单文件 · 无网络依赖 · 无账号
 
@@ -59,7 +63,7 @@ open /Applications/Floaty.app
 
 Tauri 2 · React 18 · TypeScript · Vite · TipTap 2 · Tailwind CSS · sqlx (SQLite) · Tokio · Vitest · Rust
 
-**86 前端测试 + 14 后端测试** 全绿。macOS/Windows 打包走 GitHub Actions 自动构建。
+**89 前端测试 + 24 后端测试** 全绿。macOS/Windows 打包走 GitHub Actions 自动构建（单一 `release.yml` 矩阵 + minisign 签名 + `latest.json` 自动生成）。
 
 ---
 
@@ -87,9 +91,10 @@ npm run tauri build         # 输出 .dmg 或 .msi 到 src-tauri/target/release/
 ### 发布新版本
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
-# GitHub Actions 自动跑 Windows + macOS 构建，上传到 Release
+# 同步 bump package.json / src-tauri/Cargo.toml / src-tauri/tauri.conf.json 三处 version
+git tag v0.1.x
+git push origin main && git push origin v0.1.x
+# release.yml 矩阵构建 mac+win → minisign 签名 → 自动拼 latest.json → 上传到 Release
 ```
 
 ---
@@ -111,7 +116,8 @@ git push origin v0.1.2
 - [ ] Snooze / 完成 pill 右键菜单（后端已 ready）
 - [ ] 提前 X 分钟提醒
 - [ ] 快捷键自定义（真 · 键绑定）
-- [ ] 导出 / 导入 markdown
+- [ ] 全局 `⌘⇧F` 快捷键打开搜索
+- [ ] 导出 / 导入 markdown（DB 备份已有，缺逐张导出）
 - [ ] 自定义背景图
 - [ ] Universal macOS binary（含 Intel）
 - [ ] Linux AppImage
